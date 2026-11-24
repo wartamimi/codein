@@ -79,6 +79,7 @@ object CodeinIcons {
     val ArrowUp by lazy { icon("ArrowUp") { line(12f, 19f, 12f, 5f); moveTo(6f, 11f); lineTo(12f, 5f); lineTo(18f, 11f) } }
     val ArrowDown by lazy { icon("ArrowDown") { line(12f, 5f, 12f, 19f); moveTo(6f, 13f); lineTo(12f, 19f); lineTo(18f, 13f) } }
     val ArrowRight by lazy { icon("ArrowRight") { line(5f, 12f, 19f, 12f); moveTo(13f, 6f); lineTo(19f, 12f); lineTo(13f, 18f) } }
+    val ArrowLeft by lazy { icon("ArrowLeft") { line(19f, 12f, 5f, 12f); moveTo(11f, 6f); lineTo(5f, 12f); lineTo(11f, 18f) } }
     val MoreVertical by lazy {
         icon("MoreVertical") { circle(12f, 5.5f, 0.75f); circle(12f, 12f, 0.75f); circle(12f, 18.5f, 0.75f) }
     }
