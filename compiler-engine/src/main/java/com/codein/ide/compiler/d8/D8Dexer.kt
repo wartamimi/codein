@@ -42,6 +42,9 @@ class D8Dexer @Inject constructor() {
 
         /** How many distinct merged library dex sets (one per dependency combination) to keep. */
         const val MAX_CACHED_LIBRARY_SETS = 4
+
+        /** Bytecode per D8 run when dexing tool jars; keeps peak heap well under 256 MB. */
+        const val CHUNK_BYTES = 6L * 1024 * 1024
     }
 
     /** Dexes the app's compiled classes and merges them with cached pre-dexed libraries. */
@@ -271,46 +274,100 @@ class D8Dexer @Inject constructor() {
         }
     }
 
-    /** Dexes arbitrary jars into a single dex jar (used to load kotlinc on ART). */
-    suspend fun dexJarsToArchive(jars: List<File>, androidJar: File?, minSdk: Int, output: File): DexResult = withContext(Dispatchers.Default) {
-        val diagnostics = mutableListOf<CompilerDiagnostic>()
-        val handler = CollectingHandler(diagnostics)
-        output.parentFile?.mkdirs()
-        val ok = runD8(handler) {
-            D8Command.builder(handler)
-                .addProgramFiles(jars.map { it.toPath() })
-                .apply { if (androidJar != null) addLibraryFiles(androidJar.toPath()) }
-                .setMinApiLevel(minSdk)
-                .setMode(CompilationMode.RELEASE)
-                .setOutput(output.toPath(), OutputMode.DexIndexed)
-                .build()
-        }
-        if (ok) {
-            runCatching { mergeResources(output, jars) }.onFailure {
-                diagnostics += CompilerDiagnostic(DiagnosticSource.D8, Severity.Error, "Failed to copy jar resources: ${it.message}")
-            }
-        }
-        DexResult(ok && diagnostics.none { it.severity == Severity.Error }, listOf(output), diagnostics)
-    }
-
     /**
-     * D8's archive output only contains `classes*.dex`. Tools loaded through a DexClassLoader (the
-     * Kotlin compiler in particular) also need their non-class resources: `META-INF/services`,
-     * extension XML descriptors and message bundles. This copies them in, first occurrence wins.
+     * Dexes large tool jars (the Kotlin compiler) for loading with a DexClassLoader, in bounded
+     * memory. A single D8 run over kotlin-compiler-embeddable needs far more than the ~512 MB heap an
+     * app gets, so classes are streamed in chunks of about [CHUNK_BYTES] of bytecode, each dexed on
+     * its own into `chunk-N.zip`. Classes that share an outer class stay in the same chunk so nest
+     * members and their host are desugared together. Non-class resources go into `resources.jar`.
+     * Returns every archive to put on the class loader path, in order.
      */
-    private fun mergeResources(archive: File, jars: List<File>) {
-        val merged = File(archive.parentFile, archive.name + ".merge")
-        val seen = HashSet<String>()
-        java.util.zip.ZipOutputStream(merged.outputStream().buffered()).use { out ->
-            java.util.zip.ZipFile(archive).use { dex ->
-                for (entry in dex.entries()) {
-                    if (entry.isDirectory || !seen.add(entry.name)) continue
-                    out.putNextEntry(java.util.zip.ZipEntry(entry.name))
-                    dex.getInputStream(entry).use { it.copyTo(out) }
-                    out.closeEntry()
+    suspend fun dexJarsToArchives(
+        jars: List<File>,
+        androidJar: File?,
+        minSdk: Int,
+        outputDir: File,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): DexResult = withContext(Dispatchers.Default) {
+        val diagnostics: MutableList<CompilerDiagnostic> = Collections.synchronizedList(mutableListOf())
+        outputDir.deleteRecursively()
+        outputDir.mkdirs()
+
+        // Index every class once (first jar wins), grouped by outer class name.
+        val owners = LinkedHashMap<String, Pair<File, String>>()
+        for (jar in jars.filter { it.isFile }) {
+            java.util.zip.ZipFile(jar).use { zip ->
+                for (entry in zip.entries()) {
+                    val name = entry.name
+                    if (entry.isDirectory || !name.endsWith(".class") || name.startsWith("META-INF/") || name.endsWith("module-info.class")) continue
+                    if (!owners.containsKey(name)) owners[name] = jar to name
                 }
             }
-            for (jar in jars) {
+        }
+        val groups = owners.keys.groupBy { it.substringBefore('$').removeSuffix(".class") }.toSortedMap()
+        val chunks = mutableListOf<List<String>>()
+        var current = mutableListOf<String>()
+        var currentBytes = 0L
+        val sizes = HashMap<String, Long>()
+        for (jar in jars.filter { it.isFile }) {
+            java.util.zip.ZipFile(jar).use { zip -> for (e in zip.entries()) if (owners[e.name]?.first == jar) sizes[e.name] = e.size.coerceAtLeast(1) }
+        }
+        for ((_, members) in groups) {
+            val groupBytes = members.sumOf { sizes[it] ?: 1L }
+            if (current.isNotEmpty() && currentBytes + groupBytes > CHUNK_BYTES) {
+                chunks += current
+                current = mutableListOf()
+                currentBytes = 0
+            }
+            current += members
+            currentBytes += groupBytes
+        }
+        if (current.isNotEmpty()) chunks += current
+
+        val archives = mutableListOf<File>()
+        val openJars = jars.filter { it.isFile }.associateWith { java.util.zip.ZipFile(it) }
+        try {
+            chunks.forEachIndexed { index, names ->
+                ensureActive()
+                onProgress(index, chunks.size)
+                val handler = CollectingHandler(diagnostics)
+                val out = File(outputDir, "chunk-$index.zip")
+                val ok = runD8(handler) {
+                    val builder = D8Command.builder(handler)
+                    for (name in names) {
+                        val (jar, entryName) = owners.getValue(name)
+                        val zip = openJars.getValue(jar)
+                        val bytes = zip.getInputStream(zip.getEntry(entryName)).use { it.readBytes() }
+                        builder.addClassProgramData(bytes, com.android.tools.r8.origin.Origin.unknown())
+                    }
+                    builder
+                        .apply { if (androidJar != null) addLibraryFiles(androidJar.toPath()) }
+                        .setMinApiLevel(minSdk)
+                        .setMode(CompilationMode.RELEASE)
+                        .setOutput(out.toPath(), OutputMode.DexIndexed)
+                        .build()
+                }
+                if (!ok) return@withContext DexResult(false, emptyList(), diagnostics.toList())
+                archives += out
+            }
+        } finally {
+            openJars.values.forEach { runCatching { it.close() } }
+        }
+        onProgress(chunks.size, chunks.size)
+
+        val resources = File(outputDir, "resources.jar")
+        runCatching { writeResources(resources, jars) }.onFailure {
+            diagnostics += CompilerDiagnostic(DiagnosticSource.D8, Severity.Error, "Failed to copy jar resources: ${it.message}")
+        }
+        archives += resources
+        DexResult(diagnostics.none { it.severity == Severity.Error }, archives, diagnostics.toList())
+    }
+
+    /** Copies non-class resources of [jars] (first occurrence wins) into [target]. */
+    private fun writeResources(target: File, jars: List<File>) {
+        val seen = HashSet<String>()
+        java.util.zip.ZipOutputStream(target.outputStream().buffered()).use { out ->
+            for (jar in jars.filter { it.isFile }) {
                 java.util.zip.ZipFile(jar).use { zip ->
                     for (entry in zip.entries()) {
                         val name = entry.name
@@ -322,8 +379,6 @@ class D8Dexer @Inject constructor() {
                 }
             }
         }
-        if (archive.exists()) archive.delete()
-        check(merged.renameTo(archive)) { "Unable to replace ${archive.name}" }
     }
 
     private fun isSignatureFile(name: String): Boolean {
