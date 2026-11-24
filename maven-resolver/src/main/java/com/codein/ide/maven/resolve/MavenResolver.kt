@@ -261,10 +261,20 @@ class MavenResolver @Inject constructor(
     private suspend fun androidVariantOf(coordinate: MavenCoordinate, repositories: List<MavenRepository>): MavenCoordinate? {
         val key = coordinate.toString()
         if (redirectCache.containsKey(key)) return redirectCache[key]
+        // Persisted answer from an earlier build ("-" means the module has no Android variant).
+        val marker = File(cacheRoot, coordinate.path + "/${coordinate.artifact}-${coordinate.version}.codein-variant")
+        if (marker.isFile) {
+            val stored = marker.readText().trim()
+            val cached = if (stored == "-") null else runCatching { MavenCoordinate.parse(stored) }.getOrNull()
+            redirectCache[key] = cached
+            return cached
+        }
         var result: MavenCoordinate? = null
+        var reachedAnyRepository = false
         for (repo in repositories) {
             val url = http.artifactUrl(repo, coordinate.path + "/${coordinate.artifact}-${coordinate.version}.module")
             val text = runCatching { http.getText(url) }.getOrNull() ?: continue
+            reachedAnyRepository = true
             val root = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
             val variants = ((root["variants"] as? JsonArray) ?: JsonArray(emptyList())).map { it.jsonObject }
             fun attr(v: JsonObject, name: String) = (v["attributes"] as? JsonObject)?.get(name)?.jsonPrimitive?.content
@@ -278,6 +288,9 @@ class MavenResolver @Inject constructor(
             break
         }
         redirectCache[key] = result
+        if (result != null || reachedAnyRepository) {
+            runCatching { marker.parentFile?.mkdirs(); marker.writeText(result?.toString() ?: "-") }
+        }
         return result
     }
 
@@ -295,13 +308,17 @@ class MavenResolver @Inject constructor(
             else -> listOf(pom.packaging, "jar", "aar")
         }
         val orderedRepos = listOf(repo) + repositories.filter { it != repo }
+        // Check every cached extension before touching the network, so warm builds stay offline.
         for (ext in preferredExt) {
-            val fileName = "${coordinate.baseFileName}.$ext"
-            val local = File(cacheRoot, coordinate.path + "/" + fileName)
+            val local = File(cacheRoot, coordinate.path + "/${coordinate.baseFileName}.$ext")
             if (local.isFile && local.length() > 0) {
                 onEvent(ResolveEvent.CacheHit(coordinate))
                 return ResolvedArtifact(coordinate, typeOf(ext), local, repo, dependencies)
             }
+        }
+        for (ext in preferredExt) {
+            val fileName = "${coordinate.baseFileName}.$ext"
+            val local = File(cacheRoot, coordinate.path + "/" + fileName)
             for (r in orderedRepos) {
                 val bytes = runCatching { http.download(http.artifactUrl(r, coordinate.path + "/" + fileName), local) }.getOrNull() ?: continue
                 onEvent(ResolveEvent.Downloaded(coordinate, r.name, bytes))

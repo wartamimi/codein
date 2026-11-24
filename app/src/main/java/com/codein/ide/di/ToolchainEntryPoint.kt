@@ -1,6 +1,7 @@
 package com.codein.ide.di
 
 import com.codein.ide.compiler.BuildOrchestrator
+import com.codein.ide.compiler.kotlin.KotlinToolchainInstaller
 import com.codein.ide.compiler.sdk.BuildToolchain
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -12,4 +13,5 @@ import dagger.hilt.components.SingletonComponent
 interface ToolchainEntryPoint {
     fun buildOrchestrator(): BuildOrchestrator
     fun buildToolchain(): BuildToolchain
+    fun kotlinToolchainInstaller(): KotlinToolchainInstaller
 }

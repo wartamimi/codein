@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.codein.ide.compiler.BuildRequest
 import com.codein.ide.compiler.model.BuildEvent
+import com.codein.ide.compiler.model.BuildStep
 import com.codein.ide.compiler.model.BuildResult
 import com.codein.ide.di.ToolchainEntryPoint
 import com.codein.ide.project.ProjectLanguage
@@ -67,45 +68,79 @@ class OnDeviceToolchainTest {
 
     @Test
     fun buildsJavaViewsProjectIntoSignedApk(): Unit = runBlocking {
-        val spec = ProjectSpec(
-            name = "Smoke",
-            packageName = "com.example.smoke",
-            language = ProjectLanguage.Java,
-            template = ProjectTemplate.EmptyViewsActivity,
-            minSdk = 26,
-            targetSdk = 35,
+        buildInstallAndLaunch(
+            ProjectSpec(
+                name = "Smoke",
+                packageName = "com.example.smoke",
+                language = ProjectLanguage.Java,
+                template = ProjectTemplate.EmptyViewsActivity,
+                minSdk = 26,
+                targetSdk = 35,
+            ),
         )
-        val dir = File(context.cacheDir, "smoke-project").apply { deleteRecursively(); mkdirs() }
+    }
+
+    @Test
+    fun buildsKotlinComposeProjectIntoSignedApk(): Unit = runBlocking {
+        val installer = entryPoint.kotlinToolchainInstaller()
+        val started = System.currentTimeMillis()
+        installer.install(includeCompose = true) { }.getOrElse { fail("Kotlin toolchain download failed: $it") }
+        Log.i(TAG, "Kotlin toolchain installed in ${System.currentTimeMillis() - started} ms")
+        buildInstallAndLaunch(
+            ProjectSpec(
+                name = "Compose Smoke",
+                packageName = "com.example.composesmoke",
+                language = ProjectLanguage.Kotlin,
+                template = ProjectTemplate.ComposeMaterial3,
+                minSdk = 26,
+                targetSdk = 35,
+            ),
+        )
+    }
+
+    /** Generates [spec], builds it twice (cold, then warm), then installs and launches the APK. */
+    private suspend fun buildInstallAndLaunch(spec: ProjectSpec) {
+        val dir = File(context.cacheDir, "smoke-" + spec.packageName.substringAfterLast('.')).apply { deleteRecursively(); mkdirs() }
         ProjectTemplates.generate(spec).forEach { (path, content) ->
             File(dir, path).apply { parentFile?.mkdirs(); writeText(content) }
         }
+        val label = spec.packageName.substringAfterLast('.')
         val events = entryPoint.buildOrchestrator().build(BuildRequest(dir)).toList()
         events.forEach { e ->
             when (e) {
-                is BuildEvent.Log -> Log.i(TAG, "[${e.step?.name}] ${e.message}")
-                is BuildEvent.Diagnostic -> Log.w(TAG, "[${e.step.name}] ${e.diagnostic}")
-                is BuildEvent.StepFinished -> Log.i(TAG, "step ${e.step.name}: ${e.status} in ${e.durationMillis} ms")
+                is BuildEvent.Log -> Log.i(TAG, "[$label/${e.step?.name}] ${e.message}")
+                is BuildEvent.Diagnostic -> Log.w(TAG, "[$label/${e.step.name}] ${e.diagnostic}")
+                is BuildEvent.StepFinished -> Log.i(TAG, "$label step ${e.step.name}: ${e.status} in ${e.durationMillis} ms")
                 else -> Unit
             }
         }
-        // Second build with warm caches, to measure incremental speed.
-        val warm = entryPoint.buildOrchestrator().build(BuildRequest(dir)).toList()
-        warm.filterIsInstance<BuildEvent.StepFinished>().forEach { Log.i(TAG, "warm step ${it.step.name}: ${it.status} in ${it.durationMillis} ms") }
-        (warm.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result as? BuildResult.Success)?.let { Log.i(TAG, "Warm build took ${it.durationMillis} ms") }
-        when (val result = events.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result) {
-            is BuildResult.Success -> {
-                assertTrue(result.output.isFile)
-                ZipFile(result.output).use { zip ->
-                    assertNotNull(zip.getEntry("classes.dex"))
-                    assertNotNull(zip.getEntry("AndroidManifest.xml"))
-                    assertNotNull(zip.getEntry("resources.arsc"))
-                }
-                Log.i(TAG, "Built ${result.output} (${result.output.length() / 1024} KB) in ${result.durationMillis} ms")
-                installAndLaunch(result.output, "com.example.smoke", "com.example.smoke.MainActivity")
-            }
+        val result = events.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result
+        when (result) {
+            is BuildResult.Success -> Unit
             is BuildResult.Failure -> fail("Build failed at ${result.failedStep}: " + result.diagnostics.joinToString("\n"))
             is BuildResult.Cancelled -> fail("Build was cancelled")
             null -> fail("Build produced no result")
+        }
+        result as BuildResult.Success
+        assertTrue(result.output.isFile)
+        ZipFile(result.output).use { zip ->
+            assertNotNull(zip.getEntry("classes.dex"))
+            assertNotNull(zip.getEntry("AndroidManifest.xml"))
+            assertNotNull(zip.getEntry("resources.arsc"))
+        }
+        Log.i(TAG, "$label built ${result.output} (${result.output.length() / 1024} KB) in ${result.durationMillis} ms")
+
+        // Second build with warm caches, after touching a source file, to measure an edit-and-run cycle.
+        dir.walkTopDown().firstOrNull { it.name.startsWith("MainActivity.") }?.let { it.appendText("\n") }
+        val warm = entryPoint.buildOrchestrator().build(BuildRequest(dir)).toList()
+        warm.filterIsInstance<BuildEvent.Log>().filter { it.step == BuildStep.Dexing }.forEach { Log.i(TAG, "$label warm [Dexing] ${it.message}") }
+        warm.filterIsInstance<BuildEvent.StepFinished>().forEach { Log.i(TAG, "$label warm step ${it.step.name}: ${it.status} in ${it.durationMillis} ms") }
+        when (val warmResult = warm.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result) {
+            is BuildResult.Success -> {
+                Log.i(TAG, "$label warm build took ${warmResult.durationMillis} ms")
+                installAndLaunch(warmResult.output, spec.packageName, "${spec.packageName}.MainActivity")
+            }
+            else -> fail("Warm build did not succeed: $warmResult")
         }
     }
 
