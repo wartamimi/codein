@@ -5,7 +5,9 @@ import com.codein.ide.compiler.model.CompilerDiagnostic
 import com.codein.ide.compiler.model.DiagnosticSource
 import com.codein.ide.compiler.model.Severity
 import com.codein.ide.compiler.sdk.BuildToolchain
+import android.os.Build
 import dalvik.system.DexClassLoader
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -98,11 +100,26 @@ class KotlinCompilerHook @Inject constructor(
         // Android 14+ refuses to load writable dex files.
         archives.forEach { it.setReadOnly() }
         val optimized = File(dexRoot, "oat").apply { mkdirs() }
+        allowCompilerReflection()
         val loader = DexClassLoader(archives.joinToString(File.pathSeparator) { it.absolutePath }, optimized.absolutePath, null, KotlinCompilerHook::class.java.classLoader)
         classLoader = loader
         loadedSignature = signature
         loader
     }
+
+    /**
+     * The IntelliJ core inside kotlinc reflects on `sun.misc.Unsafe` and other JDK internals that
+     * Android lists as hidden API, so the lookups fail with NoSuchMethodException on Android 9+.
+     * Codein is a development tool running the compiler in-process, so it exempts these from the
+     * hidden API policy (process-wide, once).
+     */
+    private fun allowCompilerReflection() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P || reflectionAllowed) return
+        reflectionAllowed = HiddenApiBypass.addHiddenApiExemptions("L")
+    }
+
+    @Volatile
+    private var reflectionAllowed = false
 
     override suspend fun compile(request: KotlinCompileRequest, onLog: (String) -> Unit): KotlinCompileResult = withContext(Dispatchers.Default) {
         if (!isAvailable()) {

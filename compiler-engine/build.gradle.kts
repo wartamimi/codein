@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ecj)
     implementation(libs.r8)
+    implementation(libs.hiddenapibypass)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     testImplementation(libs.junit)
