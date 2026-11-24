@@ -1,6 +1,15 @@
 package com.codein.ide.editor.search
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,20 +31,30 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codein.ide.core.ui.components.ToolbarIconButton
 import com.codein.ide.core.ui.icons.CodeinIcons
 import com.codein.ide.core.ui.theme.CodeinTheme
+import com.codein.ide.core.ui.theme.Motion
+import com.codein.ide.core.ui.theme.Sizes
+import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.core.ui.theme.codeTextStyle
+import com.codein.ide.core.ui.theme.metricsTextStyle
 
 /** State for the floating in-editor find & replace bar. */
 data class FindBarState(
@@ -53,7 +72,7 @@ data class FindBarState(
             query.isEmpty() -> ""
             validation is QueryValidation.Invalid -> "Invalid"
             matches.isEmpty() -> "No results"
-            else -> "${currentIndex + 1} / ${matches.size}"
+            else -> "${currentIndex + 1}/${matches.size}"
         }
 }
 
@@ -71,127 +90,192 @@ sealed interface FindBarAction {
     data object Close : FindBarAction
 }
 
-/** Glassmorphic floating find/replace overlay anchored at the editor's top-right. */
+/**
+ * Floating glass find & replace bar anchored at the editor's top-right (8dp inset): Tier 2 at 95%
+ * alpha with a hairline border, a live-validated regex field, tactile `.*` / `Aa` / `\b` toggle
+ * pills, a tabular match counter, and a Replace row that expands with `AnimatedVisibility`.
+ */
 @Composable
 fun FindReplaceBar(state: FindBarState, onAction: (FindBarAction) -> Unit, modifier: Modifier = Modifier) {
-    AnimatedVisibility(visible = state.visible, modifier = modifier) {
+    AnimatedVisibility(
+        visible = state.visible,
+        modifier = modifier,
+        enter = fadeIn(Motion.switch()) + scaleIn(Motion.spatial(), initialScale = 0.96f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
+        exit = fadeOut(Motion.switch()) + scaleOut(Motion.switch(), targetScale = 0.96f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)),
+    ) {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-        val shape = RoundedCornerShape(14.dp)
+        val shape = RoundedCornerShape(12.dp)
         val invalid = state.validation as? QueryValidation.Invalid
+        val noResults = state.query.isNotEmpty() && invalid == null && state.matches.isEmpty()
+        val chevron by animateFloatAsState(if (state.showReplace) 90f else 0f, Motion.spatial(), label = "replace-chevron")
         Column(
             modifier = Modifier
-                .padding(8.dp)
-                .widthIn(max = 420.dp)
-                .shadow(16.dp, shape, clip = false)
+                .padding(Spacing.sm)
+                .widthIn(max = 400.dp)
+                .shadow(4.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
                 .clip(shape)
                 .background(CodeinTheme.colors.glass)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
-                .padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .animateContentSize(Motion.spatial())
+                .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ToolbarIconButton(
-                    if (state.showReplace) CodeinIcons.ChevronDown else CodeinIcons.ChevronRight,
-                    "Toggle replace",
-                    size = 30.dp,
+                    CodeinIcons.ChevronRight,
+                    if (state.showReplace) "Hide replace" else "Show replace",
+                    size = 28.dp,
+                    iconSize = Sizes.IconSm,
+                    modifier = Modifier.rotate(chevron),
                 ) { onAction(FindBarAction.ToggleReplace) }
-                SearchField(
+                FindField(
                     value = state.query,
                     placeholder = "Find",
                     error = invalid != null,
+                    counter = state.counterText,
+                    counterIsError = invalid != null || noResults,
                     onChange = { onAction(FindBarAction.Query(it)) },
                     onSubmit = { onAction(FindBarAction.Next) },
                     modifier = Modifier.weight(1f).focusRequester(focus),
                 )
-                ToolbarIconButton(CodeinIcons.CaseSensitive, "Match case (Aa)", active = state.options.matchCase, size = 30.dp) { onAction(FindBarAction.ToggleCase) }
-                ToolbarIconButton(CodeinIcons.WholeWord, "Whole word (\\b)", active = state.options.wholeWord, size = 30.dp) { onAction(FindBarAction.ToggleWholeWord) }
-                ToolbarIconButton(CodeinIcons.Regex, "Regex (.*)", active = state.options.regex, size = 30.dp) { onAction(FindBarAction.ToggleRegex) }
+                ToolbarIconButton(CodeinIcons.ArrowUp, "Previous match", size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Previous) }
+                ToolbarIconButton(CodeinIcons.ArrowDown, "Next match", size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Next) }
+                ToolbarIconButton(CodeinIcons.Close, "Close find", size = 28.dp) { onAction(FindBarAction.Close) }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 30.dp)) {
-                Text(
-                    state.counterText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (invalid != null || (state.query.isNotEmpty() && state.matches.isEmpty())) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp),
-                )
-                ToolbarIconButton(CodeinIcons.ArrowUp, "Previous match", size = 30.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Previous) }
-                ToolbarIconButton(CodeinIcons.ArrowDown, "Next match", size = 30.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Next) }
-                ToolbarIconButton(CodeinIcons.Close, "Close find", size = 30.dp) { onAction(FindBarAction.Close) }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                modifier = Modifier.padding(start = Sizes.MinTouch, bottom = Spacing.xs),
+            ) {
+                TogglePill(".*", "Regular expression", state.options.regex, error = invalid != null) { onAction(FindBarAction.ToggleRegex) }
+                TogglePill("Aa", "Match case", state.options.matchCase) { onAction(FindBarAction.ToggleCase) }
+                TogglePill("\\b", "Whole word", state.options.wholeWord) { onAction(FindBarAction.ToggleWholeWord) }
+                if (invalid != null) {
+                    Text(
+                        "${invalid.message} (at ${invalid.index.coerceAtLeast(0)})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(start = Spacing.xs),
+                    )
+                }
             }
-            if (invalid != null) {
-                Text(
-                    "Regex error at ${invalid.index.coerceAtLeast(0)}: ${invalid.message}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(start = 38.dp, end = 8.dp),
-                )
-            }
-            AnimatedVisibility(state.showReplace) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 30.dp)) {
-                    SearchField(
+            AnimatedVisibility(
+                visible = state.showReplace,
+                enter = expandVertically(Motion.spatial()) + fadeIn(Motion.switch()),
+                exit = shrinkVertically(Motion.spatial()) + fadeOut(Motion.switch()),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = Sizes.MinTouch, bottom = Spacing.xs)) {
+                    FindField(
                         value = state.replacement,
                         placeholder = if (state.options.regex) "Replace (\$1, \$2 groups)" else "Replace",
                         error = false,
+                        counter = "",
+                        counterIsError = false,
                         onChange = { onAction(FindBarAction.Replacement(it)) },
                         onSubmit = { onAction(FindBarAction.ReplaceOne) },
                         modifier = Modifier.weight(1f),
                     )
-                    ToolbarIconButton(CodeinIcons.Replace, "Replace", size = 30.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.ReplaceOne) }
-                    Spacer(Modifier.width(2.dp))
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (state.matches.isNotEmpty()) 0.18f else 0.06f))
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            "All",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.then(
-                                if (state.matches.isNotEmpty()) Modifier.clickable { onAction(FindBarAction.ReplaceAll) } else Modifier,
-                            ),
-                        )
-                    }
+                    ToolbarIconButton(CodeinIcons.Replace, "Replace", size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.ReplaceOne) }
+                    TogglePill("All", "Replace all", active = state.matches.isNotEmpty(), enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.ReplaceAll) }
+                    Spacer(Modifier.width(Spacing.xs))
                 }
             }
         }
     }
 }
 
+/** A tactile 28dp toggle pill (min 36dp wide, 6dp corners) that lights up with the accent when on. */
 @Composable
-private fun SearchField(
+private fun TogglePill(
+    label: String,
+    description: String,
+    active: Boolean,
+    error: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    val accent = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val bg by animateColorAsState(if (active) accent.copy(alpha = 0.18f) else CodeinTheme.colors.tier3, Motion.switch(), label = "toggle-bg")
+    val border by animateColorAsState(if (active) accent.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant, Motion.switch(), label = "toggle-border")
+    val shape = RoundedCornerShape(Sizes.KeyPillCorner)
+    Box(
+        Modifier
+            .widthIn(min = Sizes.KeyPillMinWidth)
+            .height(28.dp)
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, border, shape)
+            .clickable(enabled = enabled, onClickLabel = description) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+            .padding(horizontal = Spacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 12f, false),
+            color = when {
+                !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                active -> accent
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+@Composable
+private fun FindField(
     value: String,
     placeholder: String,
     error: Boolean,
+    counter: String,
+    counterIsError: Boolean,
     onChange: (String) -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val prefs = CodeinTheme.editorPreferences
-    val border = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant
-    Box(
+    val border by animateColorAsState(
+        if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant,
+        Motion.switch(),
+        label = "find-border",
+    )
+    val shape = RoundedCornerShape(8.dp)
+    Row(
         modifier = modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .border(1.dp, border, RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.CenterStart,
+            .height(Sizes.Pill)
+            .clip(shape)
+            .background(CodeinTheme.colors.base.copy(alpha = 0.6f))
+            .border(1.dp, border, shape)
+            .padding(horizontal = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (value.isEmpty()) {
-            Text(placeholder, style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) {
+                Text(placeholder, style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = codeTextStyle(prefs.codingFont, 13f, false).copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+            )
         }
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = codeTextStyle(prefs.codingFont, 13f, false).copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-        )
+        if (counter.isNotEmpty()) {
+            Spacer(Modifier.width(Spacing.xs))
+            Text(
+                counter,
+                style = metricsTextStyle(prefs.codingFont, 11f),
+                color = if (counterIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
     }
-    Spacer(Modifier.size(4.dp))
 }

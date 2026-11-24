@@ -1,11 +1,14 @@
 package com.codein.ide.editor.palette
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +57,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.codein.ide.core.ui.components.CountBadge
+import com.codein.ide.core.ui.components.HairlineDivider
+import com.codein.ide.core.ui.components.PillChip
+import com.codein.ide.core.ui.theme.CodeinTheme
+import com.codein.ide.core.ui.theme.Motion
+import com.codein.ide.core.ui.theme.Sizes
+import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.core.ui.icons.CodeinIcons
 import com.codein.ide.core.ui.icons.FileTypeBadge
 
@@ -144,21 +153,32 @@ fun CommandPalette(
     LaunchedEffect(selected) { if (filtered.isNotEmpty()) listState.animateScrollToItem(selected) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 56.dp).imePadding(), contentAlignment = Alignment.TopCenter) {
+        Box(
+            Modifier.fillMaxWidth().padding(horizontal = Spacing.lg).padding(top = Spacing.xl + Sizes.TopBar).imePadding(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            val shape = RoundedCornerShape(16.dp)
             Column(
                 Modifier
-                    .widthIn(max = 640.dp)
+                    .widthIn(max = Sizes.PaletteMaxWidth)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
+                    .clip(shape)
+                    .background(CodeinTheme.colors.glass)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+                    .animateContentSize(Motion.spatial()),
             ) {
-                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(CodeinIcons.Command, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
+                Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(CodeinIcons.Search, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.Icon))
+                    Spacer(Modifier.width(Spacing.md))
                     Box(Modifier.weight(1f)) {
                         if (query.isEmpty()) {
-                            Text("Search files, # symbols, > actions, @ Gradle", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "Files, # symbols, > commands, @ build tasks",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = CodeinTheme.colors.textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                         BasicTextField(
                             value = query,
@@ -184,19 +204,37 @@ fun CommandPalette(
                                 },
                         )
                     }
+                    Spacer(Modifier.width(Spacing.sm))
                     CountBadge("Ctrl+P", MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp), state = listState) {
+                HairlineDivider()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                ) {
+                    ScopeHint("Files", "", query) { query = ""; selected = 0 }
+                    ScopeHint("Symbols", "#", query) { query = "#"; selected = 0 }
+                    ScopeHint("Commands", ">", query) { query = ">"; selected = 0 }
+                    ScopeHint("Build", "@", query) { query = "@"; selected = 0 }
+                }
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp), state = listState, contentPadding = PaddingValues(bottom = Spacing.xs)) {
                     itemsIndexed(filtered, key = { _, pair -> pair.first.id }) { index, (item, match) ->
                         PaletteRow(item, match.positions, index == selected) { onDismiss(); item.action() }
                     }
                 }
                 if (filtered.isEmpty()) {
-                    Text("No matches", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp))
+                    Text("No matches", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.lg))
                 }
             }
         }
     }
+}
+
+/** A scope shortcut chip; it is highlighted when the query starts with its prefix. */
+@Composable
+private fun ScopeHint(label: String, prefix: String, query: String, onClick: () -> Unit) {
+    val active = if (prefix.isEmpty()) query.firstOrNull()?.let { it !in "#>@" } ?: true else query.startsWith(prefix)
+    PillChip(if (prefix.isEmpty()) label else "$prefix $label", selected = active, onClick = onClick)
 }
 
 @Composable
@@ -204,16 +242,19 @@ private fun PaletteRow(item: PaletteItem, positions: List<Int>, selected: Boolea
     Row(
         Modifier
             .fillMaxWidth()
-            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else androidx.compose.ui.graphics.Color.Transparent)
+            .padding(horizontal = Spacing.xs)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) CodeinTheme.colors.tier3 else androidx.compose.ui.graphics.Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .heightIn(min = Sizes.MinTouch)
+            .padding(horizontal = Spacing.md, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         when {
-            item.fileName != null -> FileTypeBadge(item.fileName)
-            item.icon != null -> Icon(item.icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            else -> Spacer(Modifier.size(18.dp))
+            item.fileName != null -> FileTypeBadge(item.fileName, size = Sizes.IconSm)
+            item.icon != null -> Icon(item.icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.IconSm))
+            else -> Spacer(Modifier.size(Sizes.IconSm))
         }
         Column(Modifier.weight(1f)) {
             val accent = MaterialTheme.colorScheme.primary

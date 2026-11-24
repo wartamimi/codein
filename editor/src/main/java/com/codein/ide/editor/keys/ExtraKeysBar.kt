@@ -1,11 +1,13 @@
 package com.codein.ide.editor.keys
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,9 +34,13 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.codein.ide.core.ui.components.HairlineDivider
 import com.codein.ide.core.ui.components.VerticalHairline
 import com.codein.ide.core.ui.icons.CodeinIcons
 import com.codein.ide.core.ui.theme.CodeinTheme
+import com.codein.ide.core.ui.theme.Motion
+import com.codein.ide.core.ui.theme.Sizes
+import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.core.ui.theme.codeTextStyle
 
 /** Actions emitted by the Developer Extra Keys Bar. */
@@ -73,8 +80,9 @@ private val symbolKeys = listOf(
 )
 
 /**
- * Horizontal accessory bar anchored above the soft keyboard. The caller places it inside an
- * `imePadding()` container so it rides on top of the IME.
+ * The 42dp Developer Extra Keys Bar. The caller places it inside an `imePadding()` container so it
+ * rides directly on top of the soft keyboard. Every key is an evenly proportioned pill
+ * (min 36dp x 32dp, 6dp corners) and fires a subtle `TextHandleMove` haptic.
  */
 @Composable
 fun ExtraKeysBar(
@@ -90,47 +98,49 @@ fun ExtraKeysBar(
         if (haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         onKey(key)
     }
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .heightIn(min = 44.dp)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // AI Fix stays pinned on the left; everything else scrolls.
-        AiFixChip(highlighted = hasBuildError, onClick = { press(ExtraKey.AiFix) }, modifier = Modifier.padding(start = 6.dp, end = 4.dp))
-        VerticalHairline(Modifier.height(24.dp))
+    Column(modifier.fillMaxWidth().background(CodeinTheme.colors.tier1)) {
+        HairlineDivider()
         Row(
-            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().height(Sizes.ExtraKeysBar - 1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconKey(CodeinIcons.Tab, "Tab") { press(ExtraKey.Tab) }
-            symbolKeys.forEach { (label, key) -> TextKey(label) { press(key) } }
-            VerticalHairline(Modifier.height(20.dp))
-            IconKey(CodeinIcons.Undo, "Undo", enabled = canUndo) { press(ExtraKey.Undo) }
-            IconKey(CodeinIcons.Redo, "Redo", enabled = canRedo) { press(ExtraKey.Redo) }
-            IconKey(CodeinIcons.Comment, "Toggle comment") { press(ExtraKey.ToggleComment) }
-            IconKey(CodeinIcons.Search, "Find") { press(ExtraKey.Find) }
-            Spacer(Modifier.width(4.dp))
+            // AI Fix stays pinned on the left; everything else scrolls.
+            AiFixChip(highlighted = hasBuildError, onClick = { press(ExtraKey.AiFix) }, modifier = Modifier.padding(start = Spacing.sm, end = Spacing.xs))
+            VerticalHairline(Modifier.height(Spacing.xl))
+            Row(
+                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconKey(CodeinIcons.Tab, "Tab") { press(ExtraKey.Tab) }
+                symbolKeys.forEach { (label, key) -> TextKey(label) { press(key) } }
+                VerticalHairline(Modifier.height(Spacing.lg + Spacing.xs))
+                IconKey(CodeinIcons.Undo, "Undo", enabled = canUndo) { press(ExtraKey.Undo) }
+                IconKey(CodeinIcons.Redo, "Redo", enabled = canRedo) { press(ExtraKey.Redo) }
+                IconKey(CodeinIcons.Comment, "Toggle comment") { press(ExtraKey.ToggleComment) }
+                IconKey(CodeinIcons.Search, "Find") { press(ExtraKey.Find) }
+                Spacer(Modifier.width(Spacing.xs))
+            }
         }
     }
 }
+
+private val KeyShape = RoundedCornerShape(Sizes.KeyPillCorner)
 
 @Composable
 private fun TextKey(label: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .widthIn(min = 36.dp)
-            .height(34.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .widthIn(min = Sizes.KeyPillMinWidth)
+            .height(Sizes.KeyPillHeight)
+            .clip(KeyShape)
+            .background(CodeinTheme.colors.tier2)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, KeyShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 15f, ligatures = true), color = MaterialTheme.colorScheme.onSurface)
+        Text(label, style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 14f, ligatures = true), color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -138,34 +148,35 @@ private fun TextKey(label: String, onClick: () -> Unit) {
 private fun IconKey(icon: ImageVector, description: String, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(width = 40.dp, height = 34.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(enabled = enabled, onClick = onClick),
+            .widthIn(min = Sizes.KeyPillMinWidth + Spacing.xs)
+            .height(Sizes.KeyPillHeight)
+            .clip(KeyShape)
+            .background(CodeinTheme.colors.tier2)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, KeyShape)
+            .clickable(enabled = enabled, onClickLabel = description, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, description, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f), modifier = Modifier.size(18.dp))
+        Icon(icon, description, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.35f), modifier = Modifier.size(Sizes.Icon))
     }
 }
 
 @Composable
 private fun AiFixChip(highlighted: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val brush = Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))
+    val accent = MaterialTheme.colorScheme.primary
+    val bg by animateColorAsState(if (highlighted) accent else accent.copy(alpha = 0.14f), Motion.switch(), label = "ai-fix-bg")
+    val fg by animateColorAsState(if (highlighted) MaterialTheme.colorScheme.onPrimary else accent, Motion.switch(), label = "ai-fix-fg")
     Row(
         modifier = modifier
-            .height(34.dp)
+            .height(Sizes.KeyPillHeight)
             .clip(CircleShape)
-            .then(
-                if (highlighted) Modifier.background(brush)
-                else Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
+            .background(bg)
+            .border(1.dp, accent.copy(alpha = if (highlighted) 0f else 0.45f), CircleShape)
+            .clickable(onClickLabel = "Fix with AI", onClick = onClick)
+            .padding(horizontal = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
-        val fg = if (highlighted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
-        Icon(CodeinIcons.Sparkle, null, tint = fg, modifier = Modifier.size(16.dp))
+        Icon(CodeinIcons.Sparkle, null, tint = fg, modifier = Modifier.size(Sizes.IconSm))
         Text("AI Fix", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = fg)
     }
 }
