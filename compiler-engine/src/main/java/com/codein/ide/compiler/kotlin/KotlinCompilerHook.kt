@@ -73,18 +73,32 @@ class KotlinCompilerHook @Inject constructor(
         val signature = jars.joinToString("|") { "${it.name}:${it.length()}:${it.lastModified()}" }
         classLoader?.takeIf { loadedSignature == signature }?.let { return it }
 
-        val dexDir = File(toolchain.workRoot, "kotlinc-dex").apply { mkdirs() }
-        val dexArchive = File(dexDir, "kotlinc-${signature.hashCode().toUInt()}.jar")
-        if (!dexArchive.isFile) {
-            onLog("Preparing Kotlin compiler for ART (one-time D8 conversion of ${jars.size} jars)")
-            val result = dexer.dexJarsToArchive(jars, toolchain.androidJar(), 26, dexArchive)
+        val dexRoot = File(toolchain.workRoot, "kotlinc-dex").apply { mkdirs() }
+        val dexDir = File(dexRoot, "v2-${signature.hashCode().toUInt()}")
+        val manifest = File(dexDir, "archives.txt")
+        if (!manifest.isFile) {
+            // Drop conversions of older compiler versions (and the old single-archive layout).
+            dexRoot.listFiles().orEmpty().filter { it != dexDir && it.name != "oat" }.forEach { it.deleteRecursively() }
+            onLog("Preparing Kotlin compiler for ART (one-time D8 conversion of ${jars.size} jars, in chunks to stay within the app heap)")
+            var lastReported = -1
+            val result = dexer.dexJarsToArchives(jars, toolchain.androidJar(), 26, dexDir) { done, total ->
+                val percent = if (total == 0) 100 else done * 100 / total
+                if (percent / 10 != lastReported / 10) {
+                    lastReported = percent
+                    onLog("Converting Kotlin compiler: $percent%")
+                }
+            }
             if (!result.success) {
+                dexDir.deleteRecursively()
                 throw IllegalStateException("Failed to dex the Kotlin compiler: " + result.diagnostics.joinToString { it.message })
             }
+            manifest.writeText(result.dexFiles.joinToString("\n") { it.name })
         }
-        dexArchive.setReadOnly()
-        val optimized = File(dexDir, "oat").apply { mkdirs() }
-        val loader = DexClassLoader(dexArchive.absolutePath, optimized.absolutePath, null, KotlinCompilerHook::class.java.classLoader)
+        val archives = manifest.readLines().filter { it.isNotBlank() }.map { File(dexDir, it) }
+        // Android 14+ refuses to load writable dex files.
+        archives.forEach { it.setReadOnly() }
+        val optimized = File(dexRoot, "oat").apply { mkdirs() }
+        val loader = DexClassLoader(archives.joinToString(File.pathSeparator) { it.absolutePath }, optimized.absolutePath, null, KotlinCompilerHook::class.java.classLoader)
         classLoader = loader
         loadedSignature = signature
         loader
