@@ -1,0 +1,7 @@
+-keep class com.android.tools.r8.** { *; }
+-keep class org.eclipse.jdt.** { *; }
+-keep class org.eclipse.jgit.** { *; }
+-keep class org.bouncycastle.** { *; }
+-keep class com.android.tools.build.bundletool.** { *; }
+-keep class com.android.apksig.** { *; }
+-dontwarn **
