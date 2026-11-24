@@ -108,7 +108,10 @@ class MavenResolver @Inject constructor(
                 val children = mutableListOf<DependencyNode>()
                 for (dep in runtimeDependencies(pom.first)) {
                     if (dep.groupArtifact in exclusions || "${dep.group}:*" in exclusions || "*:*" in exclusions) continue
-                    val versionSpec = dep.version ?: pom.first.managedVersions[dep.groupArtifact] ?: continue
+                    // Gradle-published POMs sometimes carry "unspecified" for a dependency whose version
+                    // comes from a platform; the real version is requested elsewhere in the graph.
+                    val versionSpec = (dep.version?.takeUnless { it.isBlank() || it == "unspecified" }
+                        ?: pom.first.managedVersions[dep.groupArtifact]?.takeUnless { it == "unspecified" }) ?: continue
                     val concrete = if (MavenVersion.isDynamic(versionSpec)) {
                         MavenVersion.select(versionSpec, availableVersions(dep.group, dep.artifact, repositories)) ?: continue
                     } else MavenVersion.preferred(versionSpec)
@@ -142,7 +145,13 @@ class MavenResolver @Inject constructor(
                     onEvent(ResolveEvent.Failed(coordinate, e.message ?: "download failed"))
                 }
         }
-        ResolutionResult(artifacts.sortedBy { it.coordinate.toString() }, tree, failures)
+        // A failure only matters if it concerns the version that was finally selected; versions that
+        // lost conflict resolution in an earlier iteration are never used.
+        val relevantFailures = failures.filter { f ->
+            val chosen = selected[f.coordinate.groupArtifact]
+            chosen == null || chosen == f.coordinate.version
+        }.distinctBy { it.coordinate.toString() + "|" + it.reason }
+        ResolutionResult(artifacts.sortedBy { it.coordinate.toString() }, tree, relevantFailures)
     }
 
     private fun runtimeDependencies(pom: EffectivePom): List<PomDependency> =
