@@ -41,6 +41,9 @@ class KotlinToolchainInstaller @Inject constructor(
         add(ToolchainArtifact("org.jetbrains.intellij.deps", "trove4j", "1.0.20200330"))
         add(ToolchainArtifact("org.jetbrains.kotlinx", "kotlinx-coroutines-core-jvm", "1.8.0"))
         add(ToolchainArtifact("org.jetbrains", "annotations", "13.0"))
+        // The JDK ships the StAX API (javax.xml.stream) but Android does not; kotlinc's bundled
+        // Aalto parser implements it and IntelliJ uses it to read plugin descriptors.
+        add(ToolchainArtifact("javax.xml.stream", "stax-api", "1.0-2"))
         if (includeCompose) add(ToolchainArtifact("org.jetbrains.kotlin", "kotlin-compose-compiler-plugin-embeddable", KOTLIN_VERSION))
     }
 
