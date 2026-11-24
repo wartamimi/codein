@@ -1,5 +1,6 @@
 package com.codein.ide
 
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
@@ -87,6 +88,10 @@ class OnDeviceToolchainTest {
                 else -> Unit
             }
         }
+        // Second build with warm caches, to measure incremental speed.
+        val warm = entryPoint.buildOrchestrator().build(BuildRequest(dir)).toList()
+        warm.filterIsInstance<BuildEvent.StepFinished>().forEach { Log.i(TAG, "warm step ${it.step.name}: ${it.status} in ${it.durationMillis} ms") }
+        (warm.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result as? BuildResult.Success)?.let { Log.i(TAG, "Warm build took ${it.durationMillis} ms") }
         when (val result = events.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result) {
             is BuildResult.Success -> {
                 assertTrue(result.output.isFile)
@@ -96,11 +101,39 @@ class OnDeviceToolchainTest {
                     assertNotNull(zip.getEntry("resources.arsc"))
                 }
                 Log.i(TAG, "Built ${result.output} (${result.output.length() / 1024} KB) in ${result.durationMillis} ms")
+                installAndLaunch(result.output, "com.example.smoke", "com.example.smoke.MainActivity")
             }
             is BuildResult.Failure -> fail("Build failed at ${result.failedStep}: " + result.diagnostics.joinToString("\n"))
             is BuildResult.Cancelled -> fail("Build was cancelled")
             null -> fail("Build produced no result")
         }
+    }
+
+    /** Installs [apk] via the shell user, launches [activity] and fails with the crash log if the process dies. */
+    private fun installAndLaunch(apk: File, packageName: String, activity: String) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val pipes = automation.executeShellCommandRw("pm install -r -t -S ${apk.length()}")
+        val output = pipes[0]
+        val input = pipes[1]
+        ParcelFileDescriptor.AutoCloseOutputStream(input).use { out -> apk.inputStream().use { it.copyTo(out) } }
+        val installLog = ParcelFileDescriptor.AutoCloseInputStream(output).bufferedReader().readText()
+        Log.i(TAG, "pm install: $installLog")
+        assertTrue("Install failed: $installLog", installLog.contains("Success"))
+        shell("logcat -c")
+        Log.i(TAG, "am start: " + shell("am start -W -n $packageName/$activity"))
+        Thread.sleep(6000)
+        val pid = shell("pidof $packageName").trim()
+        val crash = shell("logcat -d -b crash")
+        val appLog = shell("logcat -d -v brief AndroidRuntime:E ActivityManager:W ActivityTaskManager:W *:S")
+        crash.lines().forEach { Log.i(TAG, "crash| $it") }
+        appLog.lines().takeLast(80).forEach { Log.i(TAG, "log| $it") }
+        shell("am force-stop $packageName")
+        assertTrue("Built app crashed:\n$crash\n$appLog", pid.isNotEmpty() && !crash.contains(packageName))
+    }
+
+    private fun shell(command: String): String {
+        val fd = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+        return ParcelFileDescriptor.AutoCloseInputStream(fd).bufferedReader().readText()
     }
 
     private companion object {
