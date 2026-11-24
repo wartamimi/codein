@@ -96,7 +96,7 @@ object MavenVersion : Comparator<String> {
             }
             s.startsWith("[") || s.startsWith("(") -> {
                 val range = parseRange(s) ?: return null
-                sorted.lastOrNull { range(it) }
+                sorted.lastOrNull { range(it) && isStable(it) } ?: sorted.lastOrNull { range(it) }
             }
             else -> s
         }
