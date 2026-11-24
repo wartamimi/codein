@@ -5,498 +5,144 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathBuilder
-import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
 /**
- * Codein's unified line icon set. Every glyph is drawn on a 24x24 grid with a uniform 1.5 stroke,
- * round caps and round joins (Lucide / Material Symbols Rounded inspired). Icons use a black stroke
- * so that `Icon(tint = ...)` recolors them.
+ * Codein's icon set. Every glyph comes from Lucide (ISC license, https://lucide.dev), so they all
+ * share one 24x24 grid, one optical size, round caps and round joins. The stroke is drawn at 1.75
+ * instead of Lucide's 2 so that icons at the 16 to 20dp sizes used in the chrome read as balanced
+ * next to 13 to 14sp text instead of heavy. Paths are drawn black so `Icon(tint = ...)` recolors them.
  */
 object CodeinIcons {
 
-    private fun icon(name: String, block: PathBuilder.() -> Unit): ImageVector =
-        ImageVector.Builder(name = "Codein.$name", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
-            .path(
+    private const val STROKE = 1.75f
+
+    private fun builder(name: String) = ImageVector.Builder(
+        name = "Codein.$name",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    )
+
+    /** Outline icon from one or more SVG path strings (one per Lucide element). */
+    private fun stroke(name: String, vararg paths: String): ImageVector = builder(name).apply {
+        paths.forEach { d ->
+            addPath(
+                pathData = addPathNodes(d),
                 fill = null,
                 stroke = SolidColor(Color.Black),
-                strokeLineWidth = 1.5f,
+                strokeLineWidth = STROKE,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round,
-                pathBuilder = block,
             )
-            .build()
+        }
+    }.build()
 
-    private fun filledIcon(name: String, block: PathBuilder.() -> Unit): ImageVector =
-        ImageVector.Builder(name = "Codein.$name", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
-            .path(fill = SolidColor(Color.Black), pathBuilder = block)
-            .build()
+    /** Solid icon: filled and stroked with the same paint so corners stay as round as the outline set. */
+    private fun solid(name: String, vararg paths: String): ImageVector = builder(name).apply {
+        paths.forEach { d ->
+            addPath(
+                pathData = addPathNodes(d),
+                fill = SolidColor(Color.Black),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            )
+        }
+    }.build()
 
-    private fun PathBuilder.circle(cx: Float, cy: Float, r: Float) {
-        moveTo(cx - r, cy)
-        arcTo(r, r, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = cx + r, y1 = cy)
-        arcTo(r, r, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = cx - r, y1 = cy)
-        close()
-    }
+    /** Codein brand mark: angle brackets around a diamond core, on the same grid and stroke. */
+    val BrandMark: ImageVector by lazy { stroke("BrandMark", "M8 5 2.5 12 8 19", "M16 5l5.5 7-5.5 7", "M12 8.5 15.5 12 12 15.5 8.5 12Z") }
 
-    private fun PathBuilder.line(x1: Float, y1: Float, x2: Float, y2: Float) {
-        moveTo(x1, y1)
-        lineTo(x2, y2)
-    }
+    /** Filled play triangle for the Build & Run pill (Lucide `play`). */
+    val PlayFilled: ImageVector by lazy { solid("PlayFilled", "M6 3 20 12 6 21Z") }
 
-    private fun PathBuilder.roundRect(l: Float, t: Float, r: Float, b: Float, rad: Float) {
-        moveTo(l + rad, t)
-        lineTo(r - rad, t)
-        arcTo(rad, rad, 0f, false, true, r, t + rad)
-        lineTo(r, b - rad)
-        arcTo(rad, rad, 0f, false, true, r - rad, b)
-        lineTo(l + rad, b)
-        arcTo(rad, rad, 0f, false, true, l, b - rad)
-        lineTo(l, t + rad)
-        arcTo(rad, rad, 0f, false, true, l + rad, t)
-        close()
-    }
+    /** Filled rounded square used as the stop/cancel glyph. */
+    val Stop: ImageVector by lazy { solid("Stop", "M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z") }
 
-    /** Geometric brand mark: two interlocking angle brackets around a diamond core. */
-    val BrandMark: ImageVector by lazy {
-        icon("BrandMark") {
-            moveTo(8f, 5f); lineTo(2.5f, 12f); lineTo(8f, 19f)
-            moveTo(16f, 5f); lineTo(21.5f, 12f); lineTo(16f, 19f)
-            moveTo(12f, 8.5f); lineTo(15.5f, 12f); lineTo(12f, 15.5f); lineTo(8.5f, 12f); close()
-        }
-    }
-
-    val Menu by lazy { icon("Menu") { line(4f, 6f, 20f, 6f); line(4f, 12f, 20f, 12f); line(4f, 18f, 14f, 18f) } }
-    val Close by lazy { icon("Close") { line(6f, 6f, 18f, 18f); line(18f, 6f, 6f, 18f) } }
-    val Plus by lazy { icon("Plus") { line(12f, 5f, 12f, 19f); line(5f, 12f, 19f, 12f) } }
-    val Minus by lazy { icon("Minus") { line(5f, 12f, 19f, 12f) } }
-    val Check by lazy { icon("Check") { moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 7f) } }
-    val ChevronRight by lazy { icon("ChevronRight") { moveTo(9f, 6f); lineTo(15f, 12f); lineTo(9f, 18f) } }
-    val ChevronDown by lazy { icon("ChevronDown") { moveTo(6f, 9f); lineTo(12f, 15f); lineTo(18f, 9f) } }
-    val ChevronUp by lazy { icon("ChevronUp") { moveTo(6f, 15f); lineTo(12f, 9f); lineTo(18f, 15f) } }
-    val ChevronLeft by lazy { icon("ChevronLeft") { moveTo(15f, 6f); lineTo(9f, 12f); lineTo(15f, 18f) } }
-    val ArrowUp by lazy { icon("ArrowUp") { line(12f, 19f, 12f, 5f); moveTo(6f, 11f); lineTo(12f, 5f); lineTo(18f, 11f) } }
-    val ArrowDown by lazy { icon("ArrowDown") { line(12f, 5f, 12f, 19f); moveTo(6f, 13f); lineTo(12f, 19f); lineTo(18f, 13f) } }
-    val ArrowRight by lazy { icon("ArrowRight") { line(5f, 12f, 19f, 12f); moveTo(13f, 6f); lineTo(19f, 12f); lineTo(13f, 18f) } }
-    val ArrowLeft by lazy { icon("ArrowLeft") { line(19f, 12f, 5f, 12f); moveTo(11f, 6f); lineTo(5f, 12f); lineTo(11f, 18f) } }
-    val MoreVertical by lazy {
-        icon("MoreVertical") { circle(12f, 5.5f, 0.75f); circle(12f, 12f, 0.75f); circle(12f, 18.5f, 0.75f) }
-    }
-
-    val Folder by lazy {
-        icon("Folder") {
-            moveTo(3f, 7f)
-            arcTo(2f, 2f, 0f, false, true, 5f, 5f)
-            lineTo(9.5f, 5f); lineTo(11.5f, 7.5f); lineTo(19f, 7.5f)
-            arcTo(2f, 2f, 0f, false, true, 21f, 9.5f)
-            lineTo(21f, 17f)
-            arcTo(2f, 2f, 0f, false, true, 19f, 19f)
-            lineTo(5f, 19f)
-            arcTo(2f, 2f, 0f, false, true, 3f, 17f)
-            close()
-        }
-    }
-    val FolderOpen by lazy {
-        icon("FolderOpen") {
-            moveTo(3f, 17f); lineTo(3f, 7f)
-            arcTo(2f, 2f, 0f, false, true, 5f, 5f)
-            lineTo(9.5f, 5f); lineTo(11.5f, 7.5f); lineTo(17f, 7.5f)
-            arcTo(2f, 2f, 0f, false, true, 19f, 9.5f); lineTo(19f, 10.5f)
-            moveTo(3f, 17f); lineTo(5.6f, 11.6f)
-            arcTo(2f, 2f, 0f, false, true, 7.4f, 10.5f)
-            lineTo(20.5f, 10.5f)
-            arcTo(1f, 1f, 0f, false, true, 21.4f, 11.9f)
-            lineTo(18.6f, 17.9f)
-            arcTo(2f, 2f, 0f, false, true, 16.8f, 19f)
-            lineTo(5f, 19f)
-            arcTo(2f, 2f, 0f, false, true, 3f, 17f)
-        }
-    }
-    val File by lazy {
-        icon("File") {
-            moveTo(14f, 3f); lineTo(7f, 3f)
-            arcTo(2f, 2f, 0f, false, false, 5f, 5f); lineTo(5f, 19f)
-            arcTo(2f, 2f, 0f, false, false, 7f, 21f); lineTo(17f, 21f)
-            arcTo(2f, 2f, 0f, false, false, 19f, 19f); lineTo(19f, 8f); close()
-            moveTo(14f, 3f); lineTo(14f, 8f); lineTo(19f, 8f)
-        }
-    }
-    val FilePlus by lazy {
-        icon("FilePlus") {
-            moveTo(14f, 3f); lineTo(7f, 3f)
-            arcTo(2f, 2f, 0f, false, false, 5f, 5f); lineTo(5f, 19f)
-            arcTo(2f, 2f, 0f, false, false, 7f, 21f); lineTo(17f, 21f)
-            arcTo(2f, 2f, 0f, false, false, 19f, 19f); lineTo(19f, 8f); close()
-            moveTo(14f, 3f); lineTo(14f, 8f); lineTo(19f, 8f)
-            line(12f, 11.5f, 12f, 17.5f); line(9f, 14.5f, 15f, 14.5f)
-        }
-    }
-    val FolderPlus by lazy {
-        icon("FolderPlus") {
-            moveTo(3f, 7f)
-            arcTo(2f, 2f, 0f, false, true, 5f, 5f)
-            lineTo(9.5f, 5f); lineTo(11.5f, 7.5f); lineTo(19f, 7.5f)
-            arcTo(2f, 2f, 0f, false, true, 21f, 9.5f); lineTo(21f, 17f)
-            arcTo(2f, 2f, 0f, false, true, 19f, 19f); lineTo(5f, 19f)
-            arcTo(2f, 2f, 0f, false, true, 3f, 17f); close()
-            line(12f, 10.5f, 12f, 16f); line(9.25f, 13.25f, 14.75f, 13.25f)
-        }
-    }
-
-    val Play by lazy { icon("Play") { moveTo(7f, 4.5f); lineTo(19f, 12f); lineTo(7f, 19.5f); close() } }
-    val PlayFilled by lazy { filledIcon("PlayFilled") { moveTo(7f, 4.5f); lineTo(19.5f, 12f); lineTo(7f, 19.5f); close() } }
-    val Stop by lazy { icon("Stop") { roundRect(6f, 6f, 18f, 18f, 2f) } }
-    val Hammer by lazy {
-        icon("Hammer") {
-            moveTo(15f, 12f); lineTo(6.5f, 20.5f)
-            arcTo(2.12f, 2.12f, 0f, false, true, 3.5f, 17.5f); lineTo(12f, 9f)
-            moveTo(17.64f, 15f); lineTo(22f, 10.64f)
-            moveTo(20.91f, 11.7f); lineTo(19.66f, 10.45f)
-            arcTo(2f, 2f, 0f, false, true, 19.07f, 9.03f); lineTo(19.07f, 7.7f)
-            lineTo(16.8f, 5.43f)
-            arcTo(6f, 6f, 0f, false, false, 12.56f, 3.67f); lineTo(9f, 3.67f)
-            lineTo(9.92f, 4.4f)
-            arcTo(6.6f, 6.6f, 0f, false, true, 12.4f, 9.6f); lineTo(12.4f, 11.1f)
-            lineTo(14.4f, 13.1f); lineTo(15.7f, 13.1f)
-            arcTo(2f, 2f, 0f, false, true, 17.1f, 13.7f); lineTo(18.35f, 14.95f)
-        }
-    }
-    val Search by lazy { icon("Search") { circle(11f, 11f, 6.5f); line(16f, 16f, 20.5f, 20.5f) } }
-    val Replace by lazy {
-        icon("Replace") {
-            moveTo(4f, 9f); lineTo(4f, 6f); arcTo(2f, 2f, 0f, false, true, 6f, 4f); lineTo(15f, 4f)
-            moveTo(12f, 1.5f); lineTo(15f, 4f); lineTo(12f, 6.5f)
-            moveTo(20f, 15f); lineTo(20f, 18f); arcTo(2f, 2f, 0f, false, true, 18f, 20f); lineTo(9f, 20f)
-            moveTo(12f, 17.5f); lineTo(9f, 20f); lineTo(12f, 22.5f)
-            roundRect(4f, 12f, 10f, 18f, 1.5f)
-            roundRect(14f, 6f, 20f, 12f, 1.5f)
-        }
-    }
-    val Sparkle by lazy {
-        icon("Sparkle") {
-            moveTo(12f, 3f)
-            curveTo(12.6f, 7.8f, 14.2f, 9.4f, 19f, 10f)
-            curveTo(14.2f, 10.6f, 12.6f, 12.2f, 12f, 17f)
-            curveTo(11.4f, 12.2f, 9.8f, 10.6f, 5f, 10f)
-            curveTo(9.8f, 9.4f, 11.4f, 7.8f, 12f, 3f)
-            close()
-            line(19f, 16f, 19f, 21f); line(16.5f, 18.5f, 21.5f, 18.5f)
-            line(5f, 17f, 5f, 20f); line(3.5f, 18.5f, 6.5f, 18.5f)
-        }
-    }
-    val GitBranch by lazy {
-        icon("GitBranch") {
-            line(6f, 3f, 6f, 15f)
-            circle(6f, 18f, 3f)
-            circle(18f, 6f, 3f)
-            moveTo(18f, 9f)
-            arcTo(9f, 9f, 0f, false, true, 9f, 18f)
-        }
-    }
-    val GitCommit by lazy { icon("GitCommit") { circle(12f, 12f, 3.5f); line(3f, 12f, 8.5f, 12f); line(15.5f, 12f, 21f, 12f) } }
-    val GitPull by lazy {
-        icon("GitPull") {
-            line(12f, 3f, 12f, 15f); moveTo(7f, 10f); lineTo(12f, 15f); lineTo(17f, 10f)
-            moveTo(4f, 17f); lineTo(4f, 19f); arcTo(2f, 2f, 0f, false, false, 6f, 21f); lineTo(18f, 21f)
-            arcTo(2f, 2f, 0f, false, false, 20f, 19f); lineTo(20f, 17f)
-        }
-    }
-    val GitPush by lazy {
-        icon("GitPush") {
-            line(12f, 15f, 12f, 3f); moveTo(7f, 8f); lineTo(12f, 3f); lineTo(17f, 8f)
-            moveTo(4f, 17f); lineTo(4f, 19f); arcTo(2f, 2f, 0f, false, false, 6f, 21f); lineTo(18f, 21f)
-            arcTo(2f, 2f, 0f, false, false, 20f, 19f); lineTo(20f, 17f)
-        }
-    }
-    val Package by lazy {
-        icon("Package") {
-            moveTo(12f, 2.75f); lineTo(20.5f, 7.25f); lineTo(20.5f, 16.75f); lineTo(12f, 21.25f)
-            lineTo(3.5f, 16.75f); lineTo(3.5f, 7.25f); close()
-            moveTo(3.5f, 7.25f); lineTo(12f, 11.75f); lineTo(20.5f, 7.25f)
-            line(12f, 11.75f, 12f, 21.25f)
-            line(7.75f, 5f, 16.25f, 9.5f)
-        }
-    }
-    val Key by lazy {
-        icon("Key") {
-            circle(7.5f, 15.5f, 4.5f)
-            line(10.7f, 12.3f, 20f, 3f)
-            line(16f, 7f, 19f, 10f)
-            line(18f, 5f, 21f, 8f)
-        }
-    }
-    val Shield by lazy {
-        icon("Shield") {
-            moveTo(12f, 21.5f)
-            curveTo(7f, 19.5f, 4f, 16f, 4f, 11f)
-            lineTo(4f, 5.5f); lineTo(12f, 2.5f); lineTo(20f, 5.5f); lineTo(20f, 11f)
-            curveTo(20f, 16f, 17f, 19.5f, 12f, 21.5f); close()
-            moveTo(9f, 12f); lineTo(11f, 14f); lineTo(15f, 10f)
-        }
-    }
-    val Terminal by lazy {
-        icon("Terminal") {
-            roundRect(3f, 4f, 21f, 20f, 2.5f)
-            moveTo(7f, 9f); lineTo(10f, 12f); lineTo(7f, 15f)
-            line(12.5f, 15f, 17f, 15f)
-        }
-    }
-    val Settings by lazy {
-        icon("Settings") {
-            circle(12f, 12f, 3f)
-            moveTo(12f, 2.5f); lineTo(14f, 4.6f); lineTo(16.9f, 4.1f); lineTo(17.6f, 6.9f); lineTo(20.3f, 8f)
-            lineTo(19.6f, 10.8f); lineTo(21.5f, 12.9f); lineTo(19.5f, 15f); lineTo(19.8f, 17.9f); lineTo(17f, 18.4f)
-            lineTo(15.7f, 21f); lineTo(13f, 20f); lineTo(10.3f, 21.3f); lineTo(9f, 18.7f); lineTo(6.2f, 18f)
-            lineTo(6.4f, 15.1f); lineTo(4.4f, 13f); lineTo(6f, 10.6f); lineTo(5.5f, 7.8f); lineTo(8.2f, 7f)
-            lineTo(9.4f, 4.3f); close()
-        }
-    }
-    val Undo by lazy {
-        icon("Undo") {
-            moveTo(9f, 14f); lineTo(4f, 9f); lineTo(9f, 4f)
-            moveTo(4f, 9f); lineTo(14.5f, 9f)
-            arcTo(5.5f, 5.5f, 0f, false, true, 14.5f, 20f); lineTo(11f, 20f)
-        }
-    }
-    val Redo by lazy {
-        icon("Redo") {
-            moveTo(15f, 14f); lineTo(20f, 9f); lineTo(15f, 4f)
-            moveTo(20f, 9f); lineTo(9.5f, 9f)
-            arcTo(5.5f, 5.5f, 0f, false, false, 9.5f, 20f); lineTo(13f, 20f)
-        }
-    }
-    val Comment by lazy {
-        icon("Comment") { line(10f, 4f, 6f, 20f); line(18f, 4f, 14f, 20f) }
-    }
-    val Code by lazy { icon("Code") { moveTo(8f, 6f); lineTo(2.5f, 12f); lineTo(8f, 18f); moveTo(16f, 6f); lineTo(21.5f, 12f); lineTo(16f, 18f) } }
-    val Regex by lazy {
-        icon("Regex") {
-            line(17f, 3f, 17f, 13f); line(12.7f, 5.5f, 21.3f, 10.5f); line(12.7f, 10.5f, 21.3f, 5.5f)
-            roundRect(3f, 15f, 9f, 21f, 1.5f)
-        }
-    }
-    val CaseSensitive by lazy {
-        icon("CaseSensitive") {
-            moveTo(2.5f, 17f); lineTo(6.5f, 7f); lineTo(10.5f, 17f)
-            line(4f, 13.5f, 9f, 13.5f)
-            circle(17f, 14f, 3f)
-            line(20f, 11f, 20f, 17f)
-        }
-    }
-    val WholeWord by lazy {
-        icon("WholeWord") {
-            circle(7f, 12f, 2.5f); line(9.5f, 9.5f, 9.5f, 14.5f)
-            line(14f, 7f, 14f, 14.5f); circle(16.5f, 12f, 2.5f)
-            moveTo(3f, 17.5f); lineTo(3f, 19f); lineTo(21f, 19f); lineTo(21f, 17.5f)
-        }
-    }
-    val AlertCircle by lazy { icon("AlertCircle") { circle(12f, 12f, 9f); line(12f, 7.5f, 12f, 13f); line(12f, 16.5f, 12.01f, 16.5f) } }
-    val AlertTriangle by lazy {
-        icon("AlertTriangle") {
-            moveTo(10.3f, 4f); lineTo(2.5f, 18f)
-            arcTo(2f, 2f, 0f, false, false, 4.2f, 21f); lineTo(19.8f, 21f)
-            arcTo(2f, 2f, 0f, false, false, 21.5f, 18f); lineTo(13.7f, 4f)
-            arcTo(2f, 2f, 0f, false, false, 10.3f, 4f); close()
-            line(12f, 9.5f, 12f, 13.5f); line(12f, 17f, 12.01f, 17f)
-        }
-    }
-    val Info by lazy { icon("Info") { circle(12f, 12f, 9f); line(12f, 11f, 12f, 16.5f); line(12f, 7.5f, 12.01f, 7.5f) } }
-    val CheckCircle by lazy { icon("CheckCircle") { circle(12f, 12f, 9f); moveTo(8f, 12.5f); lineTo(11f, 15.5f); lineTo(16f, 9f) } }
-    val Download by lazy {
-        icon("Download") {
-            line(12f, 3f, 12f, 15f); moveTo(7f, 10f); lineTo(12f, 15f); lineTo(17f, 10f)
-            line(4f, 20f, 20f, 20f)
-        }
-    }
-    val Share by lazy {
-        icon("Share") {
-            circle(18f, 5f, 2.5f); circle(6f, 12f, 2.5f); circle(18f, 19f, 2.5f)
-            line(8.2f, 13.3f, 15.8f, 17.7f); line(15.8f, 6.3f, 8.2f, 10.7f)
-        }
-    }
-    val Copy by lazy {
-        icon("Copy") {
-            roundRect(8f, 8f, 21f, 21f, 2f)
-            moveTo(16f, 8f); lineTo(16f, 5f); arcTo(2f, 2f, 0f, false, false, 14f, 3f); lineTo(5f, 3f)
-            arcTo(2f, 2f, 0f, false, false, 3f, 5f); lineTo(3f, 14f); arcTo(2f, 2f, 0f, false, false, 5f, 16f); lineTo(8f, 16f)
-        }
-    }
-    val Trash by lazy {
-        icon("Trash") {
-            line(3.5f, 6f, 20.5f, 6f)
-            moveTo(9f, 6f); lineTo(9f, 4f); arcTo(1f, 1f, 0f, false, true, 10f, 3f); lineTo(14f, 3f)
-            arcTo(1f, 1f, 0f, false, true, 15f, 4f); lineTo(15f, 6f)
-            moveTo(5.5f, 6f); lineTo(6.5f, 19.2f); arcTo(2f, 2f, 0f, false, false, 8.5f, 21f); lineTo(15.5f, 21f)
-            arcTo(2f, 2f, 0f, false, false, 17.5f, 19.2f); lineTo(18.5f, 6f)
-            line(10f, 10.5f, 10f, 16.5f); line(14f, 10.5f, 14f, 16.5f)
-        }
-    }
-    val Send by lazy {
-        icon("Send") {
-            moveTo(21.5f, 2.5f); lineTo(10.5f, 13.5f)
-            moveTo(21.5f, 2.5f); lineTo(14.5f, 21.5f); lineTo(10.5f, 13.5f); lineTo(2.5f, 9.5f); close()
-        }
-    }
-    val Refresh by lazy {
-        icon("Refresh") {
-            moveTo(20f, 11f); arcTo(8f, 8f, 0f, false, false, 5.6f, 7.2f)
-            moveTo(4f, 3.5f); lineTo(4f, 8f); lineTo(8.5f, 8f)
-            moveTo(4f, 13f); arcTo(8f, 8f, 0f, false, false, 18.4f, 16.8f)
-            moveTo(20f, 20.5f); lineTo(20f, 16f); lineTo(15.5f, 16f)
-        }
-    }
-    val Type by lazy {
-        icon("Type") {
-            moveTo(4f, 7f); lineTo(4f, 4f); lineTo(20f, 4f); lineTo(20f, 7f)
-            line(12f, 4f, 12f, 20f); line(9f, 20f, 15f, 20f)
-        }
-    }
-    val Palette by lazy {
-        icon("Palette") {
-            moveTo(12f, 21f)
-            arcTo(9f, 9f, 0f, true, true, 21f, 12f)
-            curveTo(21f, 14.2f, 19.2f, 15f, 17.5f, 15f); lineTo(15.5f, 15f)
-            arcTo(1.75f, 1.75f, 0f, false, false, 14.3f, 18f)
-            curveTo(15.2f, 19f, 14.5f, 21f, 12f, 21f); close()
-            circle(7.5f, 11f, 0.9f); circle(10.5f, 7f, 0.9f); circle(15f, 7.5f, 0.9f)
-        }
-    }
-    val Command by lazy {
-        icon("Command") {
-            moveTo(9f, 9f); lineTo(9f, 6f); arcTo(3f, 3f, 0f, true, false, 6f, 9f); lineTo(18f, 9f)
-            arcTo(3f, 3f, 0f, true, false, 15f, 6f); lineTo(15f, 18f)
-            arcTo(3f, 3f, 0f, true, false, 18f, 15f); lineTo(6f, 15f)
-            arcTo(3f, 3f, 0f, true, false, 9f, 18f); close()
-        }
-    }
-    val Layers by lazy {
-        icon("Layers") {
-            moveTo(12f, 3f); lineTo(21.5f, 8f); lineTo(12f, 13f); lineTo(2.5f, 8f); close()
-            moveTo(2.5f, 12.5f); lineTo(12f, 17.5f); lineTo(21.5f, 12.5f)
-            moveTo(2.5f, 16.5f); lineTo(12f, 21.5f); lineTo(21.5f, 16.5f)
-        }
-    }
-    val Smartphone by lazy { icon("Smartphone") { roundRect(6f, 2.5f, 18f, 21.5f, 2.5f); line(11f, 18.5f, 13f, 18.5f) } }
-    val Save by lazy {
-        icon("Save") {
-            moveTo(5f, 3f); lineTo(16f, 3f); lineTo(21f, 8f); lineTo(21f, 19f)
-            arcTo(2f, 2f, 0f, false, true, 19f, 21f); lineTo(5f, 21f)
-            arcTo(2f, 2f, 0f, false, true, 3f, 19f); lineTo(3f, 5f)
-            arcTo(2f, 2f, 0f, false, true, 5f, 3f); close()
-            moveTo(7f, 21f); lineTo(7f, 14f); lineTo(17f, 14f); lineTo(17f, 21f)
-            moveTo(7f, 3f); lineTo(7f, 7.5f); lineTo(14f, 7.5f)
-        }
-    }
-    val Diff by lazy {
-        icon("Diff") {
-            line(12f, 3f, 12f, 10f); line(8.5f, 6.5f, 15.5f, 6.5f)
-            line(8.5f, 14.5f, 15.5f, 14.5f)
-            line(6f, 20.5f, 18f, 20.5f)
-        }
-    }
-    val Bug by lazy {
-        icon("Bug") {
-            roundRect(7f, 7f, 17f, 20.5f, 5f)
-            line(12f, 11f, 12f, 20.5f)
-            line(3f, 12.5f, 7f, 12.5f); line(17f, 12.5f, 21f, 12.5f)
-            line(4f, 7f, 7.5f, 9f); line(20f, 7f, 16.5f, 9f)
-            line(4f, 18.5f, 7.3f, 16.5f); line(20f, 18.5f, 16.7f, 16.5f)
-            moveTo(9f, 7.5f); lineTo(9f, 6f); arcTo(3f, 3f, 0f, false, true, 15f, 6f); lineTo(15f, 7.5f)
-        }
-    }
-    val Filter by lazy { icon("Filter") { moveTo(3f, 4f); lineTo(21f, 4f); lineTo(14f, 12.5f); lineTo(14f, 19f); lineTo(10f, 21f); lineTo(10f, 12.5f); close() } }
-    val Lock by lazy {
-        icon("Lock") {
-            roundRect(4f, 11f, 20f, 21f, 2f)
-            moveTo(7.5f, 11f); lineTo(7.5f, 7.5f); arcTo(4.5f, 4.5f, 0f, false, true, 16.5f, 7.5f); lineTo(16.5f, 11f)
-        }
-    }
-    val Unlock by lazy {
-        icon("Unlock") {
-            roundRect(4f, 11f, 20f, 21f, 2f)
-            moveTo(7.5f, 11f); lineTo(7.5f, 7.5f); arcTo(4.5f, 4.5f, 0f, false, true, 16.2f, 6f)
-        }
-    }
-    val Pause by lazy { icon("Pause") { line(9f, 5f, 9f, 19f); line(15f, 5f, 15f, 19f) } }
-    val Clock by lazy { icon("Clock") { circle(12f, 12f, 9f); moveTo(12f, 7f); lineTo(12f, 12f); lineTo(15.5f, 14f) } }
-    val Image by lazy {
-        icon("Image") {
-            roundRect(3f, 3f, 21f, 21f, 2.5f)
-            circle(9f, 9f, 1.75f)
-            moveTo(21f, 15.5f); lineTo(16f, 10.5f); lineTo(5f, 21f)
-        }
-    }
-    val Archive by lazy {
-        icon("Archive") {
-            roundRect(2.5f, 3.5f, 21.5f, 8f, 1f)
-            moveTo(4f, 8f); lineTo(4f, 19f); arcTo(2f, 2f, 0f, false, false, 6f, 21f); lineTo(18f, 21f)
-            arcTo(2f, 2f, 0f, false, false, 20f, 19f); lineTo(20f, 8f)
-            line(10f, 12f, 14f, 12f)
-        }
-    }
-    val Wrap by lazy {
-        icon("Wrap") {
-            line(3f, 6f, 21f, 6f); line(3f, 18f, 9f, 18f)
-            moveTo(3f, 12f); lineTo(18f, 12f); arcTo(3f, 3f, 0f, false, true, 18f, 18f); lineTo(13f, 18f)
-            moveTo(15f, 16f); lineTo(13f, 18f); lineTo(15f, 20f)
-        }
-    }
-    val Keyboard by lazy {
-        icon("Keyboard") {
-            roundRect(2.5f, 5.5f, 21.5f, 18.5f, 2f)
-            line(6f, 9.5f, 6.01f, 9.5f); line(10f, 9.5f, 10.01f, 9.5f); line(14f, 9.5f, 14.01f, 9.5f); line(18f, 9.5f, 18.01f, 9.5f)
-            line(8f, 14.5f, 16f, 14.5f)
-        }
-    }
-    val Tab by lazy { icon("Tab") { line(3f, 12f, 17f, 12f); moveTo(13f, 8f); lineTo(17f, 12f); lineTo(13f, 16f); line(21f, 6f, 21f, 18f) } }
-    val Wand by lazy {
-        icon("Wand") {
-            line(3f, 21f, 15f, 9f)
-            moveTo(15f, 4f); lineTo(15f, 6f); moveTo(15f, 12f); lineTo(15f, 14f)
-            moveTo(10f, 9f); lineTo(12f, 9f); moveTo(18f, 9f); lineTo(20f, 9f)
-            line(17.5f, 6.5f, 19f, 5f); line(12.5f, 6.5f, 11f, 5f); line(17.5f, 11.5f, 19f, 13f)
-        }
-    }
-    val History by lazy {
-        icon("History") {
-            moveTo(3f, 12f); arcTo(9f, 9f, 0f, true, false, 5.6f, 5.6f)
-            moveTo(3f, 3.5f); lineTo(3f, 8f); lineTo(7.5f, 8f)
-            moveTo(12f, 7.5f); lineTo(12f, 12f); lineTo(15f, 14f)
-        }
-    }
-    val Sidebar by lazy { icon("Sidebar") { roundRect(3f, 4f, 21f, 20f, 2.5f); line(9f, 4f, 9f, 20f) } }
-    val PanelBottom by lazy { icon("PanelBottom") { roundRect(3f, 4f, 21f, 20f, 2.5f); line(3f, 14.5f, 21f, 14.5f) } }
-    val Rocket by lazy {
-        icon("Rocket") {
-            moveTo(12f, 15f); lineTo(9f, 12f)
-            curveTo(10.5f, 7f, 14.5f, 3.5f, 20.5f, 3.5f)
-            curveTo(20.5f, 9.5f, 17f, 13.5f, 12f, 15f); close()
-            moveTo(9f, 12f); lineTo(5f, 12f); lineTo(7f, 8.5f); lineTo(11f, 8.5f)
-            moveTo(12f, 15f); lineTo(12f, 19f); lineTo(15.5f, 17f); lineTo(15.5f, 13f)
-            moveTo(5.5f, 16.5f); curveTo(4f, 17.8f, 3.5f, 20.5f, 3.5f, 20.5f); curveTo(3.5f, 20.5f, 6.2f, 20f, 7.5f, 18.5f)
-        }
-    }
-    val PanelRight by lazy { icon("PanelRight") { roundRect(3f, 4f, 21f, 20f, 2.5f); line(15f, 4f, 15f, 20f) } }
-    val CollapseAll by lazy {
-        icon("CollapseAll") {
-            roundRect(4f, 4f, 20f, 20f, 2.5f)
-            line(8.5f, 12f, 15.5f, 12f)
-        }
-    }
-    val Export by lazy {
-        icon("Export") {
-            line(12f, 15f, 12f, 3.5f)
-            moveTo(7.5f, 8f); lineTo(12f, 3.5f); lineTo(16.5f, 8f)
-            moveTo(4f, 13f); lineTo(4f, 18.5f); curveTo(4f, 19.6f, 4.9f, 20.5f, 6f, 20.5f)
-            lineTo(18f, 20.5f); curveTo(19.1f, 20.5f, 20f, 19.6f, 20f, 18.5f); lineTo(20f, 13f)
-        }
-    }
-    val ScrollLock by lazy {
-        icon("ScrollLock") {
-            line(12f, 3.5f, 12f, 14.5f)
-            moveTo(7.5f, 10f); lineTo(12f, 14.5f); lineTo(16.5f, 10f)
-            line(5f, 19.5f, 19f, 19.5f)
-        }
-    }
+    val Menu: ImageVector by lazy { stroke("Menu", "M4 12L20 12", "M4 6L20 6", "M4 18L20 18") }
+    val Close: ImageVector by lazy { stroke("Close", "M18 6 6 18", "m6 6 12 12") }
+    val Plus: ImageVector by lazy { stroke("Plus", "M5 12h14", "M12 5v14") }
+    val Minus: ImageVector by lazy { stroke("Minus", "M5 12h14") }
+    val Check: ImageVector by lazy { stroke("Check", "M20 6 9 17l-5-5") }
+    val ChevronRight: ImageVector by lazy { stroke("ChevronRight", "m9 18 6-6-6-6") }
+    val ChevronDown: ImageVector by lazy { stroke("ChevronDown", "m6 9 6 6 6-6") }
+    val ChevronUp: ImageVector by lazy { stroke("ChevronUp", "m18 15-6-6-6 6") }
+    val ChevronLeft: ImageVector by lazy { stroke("ChevronLeft", "m15 18-6-6 6-6") }
+    val ArrowUp: ImageVector by lazy { stroke("ArrowUp", "m5 12 7-7 7 7", "M12 19V5") }
+    val ArrowDown: ImageVector by lazy { stroke("ArrowDown", "M12 5v14", "m19 12-7 7-7-7") }
+    val ArrowRight: ImageVector by lazy { stroke("ArrowRight", "M5 12h14", "m12 5 7 7-7 7") }
+    val ArrowLeft: ImageVector by lazy { stroke("ArrowLeft", "m12 19-7-7 7-7", "M19 12H5") }
+    val MoreVertical: ImageVector by lazy { stroke("MoreVertical", "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M11 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M11 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z") }
+    val Folder: ImageVector by lazy { stroke("Folder", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z") }
+    val FolderOpen: ImageVector by lazy { stroke("FolderOpen", "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2") }
+    val File: ImageVector by lazy { stroke("File", "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z", "M14 2v4a2 2 0 0 0 2 2h4") }
+    val FilePlus: ImageVector by lazy { stroke("FilePlus", "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z", "M14 2v4a2 2 0 0 0 2 2h4", "M9 15h6", "M12 18v-6") }
+    val FolderPlus: ImageVector by lazy { stroke("FolderPlus", "M12 10v6", "M9 13h6", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z") }
+    val Play: ImageVector by lazy { stroke("Play", "M6 3 L20 12 L6 21 L6 3Z") }
+    val Hammer: ImageVector by lazy { stroke("Hammer", "m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9", "m18 15 4-4", "m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5") }
+    val Search: ImageVector by lazy { stroke("Search", "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z", "m21 21-4.3-4.3") }
+    val Replace: ImageVector by lazy { stroke("Replace", "M14 4a2 2 0 0 1 2-2", "M16 10a2 2 0 0 1-2-2", "M20 2a2 2 0 0 1 2 2", "M22 8a2 2 0 0 1-2 2", "m3 7 3 3 3-3", "M6 10V5a3 3 0 0 1 3-3h1", "M4 14h4a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-4a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z") }
+    val Sparkle: ImageVector by lazy { stroke("Sparkle", "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z", "M20 3v4", "M22 5h-4", "M4 17v2", "M5 18H3") }
+    val GitBranch: ImageVector by lazy { stroke("GitBranch", "M6 3L6 15", "M15 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M18 9a9 9 0 0 1-9 9") }
+    val GitCommit: ImageVector by lazy { stroke("GitCommit", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M3 12L9 12", "M15 12L21 12") }
+    val GitPull: ImageVector by lazy { stroke("GitPull", "M12 17V3", "m6 11 6 6 6-6", "M19 21H5") }
+    val GitPush: ImageVector by lazy { stroke("GitPush", "m18 9-6-6-6 6", "M12 3v14", "M5 21h14") }
+    val Package: ImageVector by lazy { stroke("Package", "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z", "M12 22V12", "m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7", "m7.5 4.27 9 5.15") }
+    val Key: ImageVector by lazy { stroke("Key", "M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z", "M16 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z") }
+    val Shield: ImageVector by lazy { stroke("Shield", "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z", "m9 12 2 2 4-4") }
+    val Terminal: ImageVector by lazy { stroke("Terminal", "m7 11 2-2-2-2", "M11 13h4", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z") }
+    val Settings: ImageVector by lazy { stroke("Settings", "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
+    val Undo: ImageVector by lazy { stroke("Undo", "M9 14 4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11") }
+    val Redo: ImageVector by lazy { stroke("Redo", "m15 14 5-5-5-5", "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13") }
+    val Comment: ImageVector by lazy { stroke("Comment", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z") }
+    val Code: ImageVector by lazy { stroke("Code", "M16 18 L22 12 L16 6", "M8 6 L2 12 L8 18") }
+    val Regex: ImageVector by lazy { stroke("Regex", "M17 3v10", "m12.67 5.5 8.66 5", "m12.67 10.5 8.66-5", "M9 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2z") }
+    val CaseSensitive: ImageVector by lazy { stroke("CaseSensitive", "m3 15 4-8 4 8", "M4 13h6", "M15 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M21 9v6") }
+    val WholeWord: ImageVector by lazy { stroke("WholeWord", "M4 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M10 9v6", "M14 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M14 7v8", "M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1") }
+    val AlertCircle: ImageVector by lazy { stroke("AlertCircle", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 8L12 12", "M12 16L12.01 16") }
+    val AlertTriangle: ImageVector by lazy { stroke("AlertTriangle", "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3", "M12 9v4", "M12 17h.01") }
+    val Info: ImageVector by lazy { stroke("Info", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 16v-4", "M12 8h.01") }
+    val CheckCircle: ImageVector by lazy { stroke("CheckCircle", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "m9 12 2 2 4-4") }
+    val Download: ImageVector by lazy { stroke("Download", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10 L12 15 L17 10", "M12 15L12 3") }
+    val Share: ImageVector by lazy { stroke("Share", "M15 5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M15 19a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M8.59 13.51L15.42 17.49", "M15.41 6.51L8.59 10.49") }
+    val Copy: ImageVector by lazy { stroke("Copy", "M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2") }
+    val Trash: ImageVector by lazy { stroke("Trash", "M3 6h18", "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6", "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2", "M10 11L10 17", "M14 11L14 17") }
+    val Send: ImageVector by lazy { stroke("Send", "M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z", "M6 12h16") }
+    val Refresh: ImageVector by lazy { stroke("Refresh", "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", "M21 3v5h-5", "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", "M8 16H3v5") }
+    val Type: ImageVector by lazy { stroke("Type", "M4 7 L4 4 L20 4 L20 7", "M9 20L15 20", "M12 4L12 20") }
+    val Palette: ImageVector by lazy { stroke("Palette", "M13 6.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z", "M17 10.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z", "M8 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z", "M6 12.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z", "M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z") }
+    val Command: ImageVector by lazy { stroke("Command", "M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3") }
+    val Layers: ImageVector by lazy { stroke("Layers", "m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z", "m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65", "m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65") }
+    val Smartphone: ImageVector by lazy { stroke("Smartphone", "M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-16a2 2 0 0 1 2 -2Z", "M12 18h.01") }
+    val Save: ImageVector by lazy { stroke("Save", "M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7", "M7 3v4a1 1 0 0 0 1 1h7") }
+    val Diff: ImageVector by lazy { stroke("Diff", "M12 3v14", "M5 10h14", "M5 21h14") }
+    val Bug: ImageVector by lazy { stroke("Bug", "m8 2 1.88 1.88", "M14.12 3.88 16 2", "M9 7.13v-1a3.003 3.003 0 1 1 6 0v1", "M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6", "M12 20v-9", "M6.53 9C4.6 8.8 3 7.1 3 5", "M6 13H2", "M3 21c0-2.1 1.7-3.9 3.8-4", "M20.97 5c0 2.1-1.6 3.8-3.5 4", "M22 13h-4", "M17.2 17c2.1.1 3.8 1.9 3.8 4") }
+    val Filter: ImageVector by lazy { stroke("Filter", "M3 6h18", "M7 12h10", "M10 18h4") }
+    val Lock: ImageVector by lazy { stroke("Lock", "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z", "M7 11V7a5 5 0 0 1 10 0v4") }
+    val Unlock: ImageVector by lazy { stroke("Unlock", "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z", "M7 11V7a5 5 0 0 1 9.9-1") }
+    val Pause: ImageVector by lazy { stroke("Pause", "M15 4h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1Z", "M7 4h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1Z") }
+    val Clock: ImageVector by lazy { stroke("Clock", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 6 L12 12 L16 14") }
+    val Image: ImageVector by lazy { stroke("Image", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M7 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21") }
+    val Archive: ImageVector by lazy { stroke("Archive", "M3 3h18a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-18a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8", "M10 12h4") }
+    val Wrap: ImageVector by lazy { stroke("Wrap", "M3 6L21 6", "M3 12h15a3 3 0 1 1 0 6h-4", "M16 16 L14 18 L16 20", "M3 18L10 18") }
+    val Keyboard: ImageVector by lazy { stroke("Keyboard", "M10 8h.01", "M12 12h.01", "M14 8h.01", "M16 12h.01", "M18 8h.01", "M6 8h.01", "M7 16h10", "M8 12h.01", "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z") }
+    val Tab: ImageVector by lazy { stroke("Tab", "M17 12H3", "m11 18 6-6-6-6", "M21 5v14") }
+    val Wand: ImageVector by lazy { stroke("Wand", "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72", "m14 7 3 3", "M5 6v4", "M19 14v4", "M10 2v2", "M7 8H3", "M21 16h-4", "M11 3H9") }
+    val History: ImageVector by lazy { stroke("History", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M12 7v5l4 2") }
+    val Sidebar: ImageVector by lazy { stroke("Sidebar", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M9 3v18") }
+    val PanelBottom: ImageVector by lazy { stroke("PanelBottom", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M3 15h18") }
+    val Rocket: ImageVector by lazy { stroke("Rocket", "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z", "m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z", "M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0", "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5") }
+    val PanelRight: ImageVector by lazy { stroke("PanelRight", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M15 3v18") }
+    val CollapseAll: ImageVector by lazy { stroke("CollapseAll", "m7 20 5-5 5 5", "m7 4 5 5 5-5") }
+    val Export: ImageVector by lazy { stroke("Export", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8 L12 3 L7 8", "M12 3L12 15") }
+    val ScrollLock: ImageVector by lazy { stroke("ScrollLock", "M12 2v14", "m19 9-7 7-7-7", "M11 21a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z") }
+    val Server: ImageVector by lazy { stroke("Server", "M4 2h16a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z", "M4 14h16a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z", "M6 6L6.01 6", "M6 18L6.01 18") }
+    val Eye: ImageVector by lazy { stroke("Eye", "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
+    val EyeOff: ImageVector by lazy { stroke("EyeOff", "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49", "M14.084 14.158a3 3 0 0 1-4.242-4.242", "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143", "m2 2 20 20") }
+    val Globe: ImageVector by lazy { stroke("Globe", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20") }
+    val Bot: ImageVector by lazy { stroke("Bot", "M12 8V4H8", "M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z", "M2 14h2", "M20 14h2", "M15 13v2", "M9 13v2") }
 }

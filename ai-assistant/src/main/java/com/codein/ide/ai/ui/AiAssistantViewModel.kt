@@ -80,9 +80,9 @@ class AiAssistantViewModel @Inject constructor(
                 val active = s.active
                 _state.update {
                     it.copy(
-                        providerLabel = s.activeProvider.displayName,
+                        providerLabel = active?.label ?: s.activeProvider.displayName,
                         modelLabel = active?.model.orEmpty(),
-                        configured = active?.hasApiKey == true,
+                        configured = active?.isReady == true,
                     )
                 }
             }

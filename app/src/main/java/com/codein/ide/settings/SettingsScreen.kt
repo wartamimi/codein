@@ -214,11 +214,14 @@ fun SettingsScreen(
                     SettingsTab.Toolchain -> ToolchainSection(viewModel)
                     SettingsTab.Ai -> {
                         val ai by aiSettingsViewModel.settings.collectAsStateWithLifecycle()
+                        val fetch by aiSettingsViewModel.fetch.collectAsStateWithLifecycle()
                         Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
                             AiProviderSettings(
                                 settings = ai,
+                                fetch = fetch,
                                 onSelectProvider = { aiSettingsViewModel.selectProvider(it) },
-                                onSave = { p, key, model, url -> aiSettingsViewModel.save(p, key, model, url) },
+                                onSave = { aiSettingsViewModel.save(it) },
+                                onRefreshModels = { aiSettingsViewModel.refreshModels(it) },
                                 onClearKey = { aiSettingsViewModel.clearKey(it) },
                                 onMaxTokens = { aiSettingsViewModel.setMaxTokens(it) },
                             )

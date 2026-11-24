@@ -12,10 +12,12 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -72,8 +74,41 @@ object CodeinTheme {
         @Composable get() = LocalEditorPreferences.current
 }
 
-private fun extendedColorsFor(scheme: EditorColorScheme): CodeinExtendedColors {
+/** WCAG contrast ratio between two opaque colors. */
+internal fun contrastRatio(a: Color, b: Color): Float {
+    val la = a.luminance() + 0.05f
+    val lb = b.luminance() + 0.05f
+    return if (la > lb) la / lb else lb / la
+}
+
+/**
+ * Nudges [fg] toward [strong] until it reaches [minRatio] contrast against [bg], so secondary and
+ * muted text stays readable on every surface tier of every theme (Tokyo Night's and Dracula's
+ * comment greys are far below 4.5:1 on their card surfaces as shipped).
+ */
+internal fun legible(fg: Color, bg: Color, strong: Color, minRatio: Float = 4.5f): Color {
+    if (contrastRatio(fg, bg) >= minRatio) return fg
+    var t = 0f
+    var out = fg
+    while (t < 1f && contrastRatio(out, bg) < minRatio) {
+        t += 0.05f
+        out = lerp(fg, strong, t.coerceAtMost(1f))
+    }
+    return out
+}
+
+/** Theme chrome with secondary/muted text lifted to readable contrast against the brightest tier. */
+private fun readableChrome(scheme: EditorColorScheme): ChromePalette {
     val c = scheme.chrome
+    val worst = c.tier3
+    return c.copy(
+        textSecondary = legible(c.textSecondary, worst, c.textPrimary, 4.5f),
+        textMuted = legible(c.textMuted, worst, c.textPrimary, 4.5f),
+    )
+}
+
+private fun extendedColorsFor(scheme: EditorColorScheme): CodeinExtendedColors {
+    val c = readableChrome(scheme)
     return CodeinExtendedColors(
         base = c.base,
         tier1 = c.tier1,
@@ -91,7 +126,7 @@ private fun extendedColorsFor(scheme: EditorColorScheme): CodeinExtendedColors {
 
 /** Maps a theme's [ChromePalette] onto the Material 3 color roles used across the app. */
 private fun materialColorsFor(scheme: EditorColorScheme): ColorScheme {
-    val c = scheme.chrome
+    val c = readableChrome(scheme)
     val hairline = c.hairlineSource.copy(alpha = HairlineAlpha)
     val outline = c.hairlineSource.copy(alpha = 0.55f)
     val primaryContainer = lerp(c.tier2, c.accent, 0.28f)
@@ -213,7 +248,13 @@ fun CodeinTheme(
             colorScheme = colorScheme,
             typography = CodeinTypography,
             shapes = CodeinShapes,
-            content = content,
-        )
+        ) {
+            // No root Surface wraps the app, so seed the content color here. Without it every Text
+            // and Icon that doesn't set a color falls back to black, which vanishes on dark themes.
+            CompositionLocalProvider(
+                LocalContentColor provides colorScheme.onBackground,
+                content = content,
+            )
+        }
     }
 }

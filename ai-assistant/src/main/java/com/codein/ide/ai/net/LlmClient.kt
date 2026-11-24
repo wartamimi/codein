@@ -1,6 +1,6 @@
 package com.codein.ide.ai.net
 
-import com.codein.ide.ai.model.AiProvider
+import com.codein.ide.ai.model.ApiFormat
 import com.codein.ide.ai.model.ChatRole
 import com.codein.ide.ai.model.ChatTurn
 import com.codein.ide.ai.model.ProviderConfig
@@ -13,12 +13,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -35,6 +38,8 @@ import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Streams chat completions from Anthropic (Messages API), any OpenAI-compatible Chat Completions
@@ -55,13 +60,18 @@ class LlmClient @Inject constructor() {
 
     fun stream(config: ProviderConfig, system: String, turns: List<ChatTurn>): Flow<StreamEvent> = flow {
         if (!config.isUsable) {
-            emit(StreamEvent.Failed("No API key configured for ${config.provider.displayName}. Add one in Settings → AI providers."))
+            val missing = when {
+                !config.hasCredentials -> "No API key configured for ${config.label}."
+                config.baseUrl.isBlank() -> "No base URL set for ${config.label}."
+                else -> "No model selected for ${config.label}."
+            }
+            emit(StreamEvent.Failed("$missing Open Settings → AI providers."))
             return@flow
         }
-        val request = when (config.provider) {
-            AiProvider.Anthropic -> anthropicRequest(config, system, turns)
-            AiProvider.OpenAiCompatible -> openAiRequest(config, system, turns)
-            AiProvider.Gemini -> geminiRequest(config, system, turns)
+        val request = when (config.format) {
+            ApiFormat.Anthropic -> anthropicRequest(config, system, turns)
+            ApiFormat.OpenAi -> openAiRequest(config, system, turns)
+            ApiFormat.Gemini -> geminiRequest(config, system, turns)
         }
         val call = http.newCall(request)
         val job = currentCoroutineContext()[Job]
@@ -83,10 +93,10 @@ class LlmClient @Inject constructor() {
                     return@flow
                 }
                 val reader = SseReader(body.source())
-                when (config.provider) {
-                    AiProvider.Anthropic -> consumeAnthropic(reader)
-                    AiProvider.OpenAiCompatible -> consumeOpenAi(reader)
-                    AiProvider.Gemini -> consumeGemini(reader)
+                when (config.format) {
+                    ApiFormat.Anthropic -> consumeAnthropic(reader)
+                    ApiFormat.OpenAi -> consumeOpenAi(reader)
+                    ApiFormat.Gemini -> consumeGemini(reader)
                 }
             }
         } catch (e: IOException) {
@@ -118,8 +128,7 @@ class LlmClient @Inject constructor() {
         }
         val builder = Request.Builder()
             .url(config.baseUrl.trimEnd('/') + "/v1/messages")
-            .header("x-api-key", config.apiKey)
-            .header("anthropic-version", ANTHROPIC_VERSION)
+            .auth(config)
             .header("content-type", "application/json")
             .header("accept", "text/event-stream")
         if (useFallbacks) builder.header("anthropic-beta", ANTHROPIC_FALLBACK_BETA)
@@ -178,7 +187,7 @@ class LlmClient @Inject constructor() {
         }
         return Request.Builder()
             .url(config.baseUrl.trimEnd('/') + "/chat/completions")
-            .header("Authorization", "Bearer ${config.apiKey}")
+            .auth(config)
             .header("content-type", "application/json")
             .header("accept", "text/event-stream")
             .post(body.toString().toRequestBody(JSON_MEDIA))
@@ -231,7 +240,7 @@ class LlmClient @Inject constructor() {
         val model = URLEncoder.encode(config.model, "UTF-8")
         return Request.Builder()
             .url(config.baseUrl.trimEnd('/') + "/v1beta/models/$model:streamGenerateContent?alt=sse")
-            .header("x-goog-api-key", config.apiKey)
+            .auth(config)
             .header("content-type", "application/json")
             .header("accept", "text/event-stream")
             .post(body.toString().toRequestBody(JSON_MEDIA))
@@ -266,7 +275,100 @@ class LlmClient @Inject constructor() {
         emit(StreamEvent.Completed(finish, inputTokens, outputTokens))
     }
 
+    // ---------------------------------------------------------------- model list
+
+    /**
+     * Fetches the model ids the endpoint offers: `GET /v1/models` (Anthropic), `GET /models`
+     * (OpenAI-compatible, including Ollama, LM Studio and OpenRouter) or `GET /v1beta/models`
+     * (Gemini, filtered to models that support generateContent). Follows pagination.
+     *
+     * @throws ModelListException with a user-facing message when the request fails.
+     */
+    suspend fun listModels(config: ProviderConfig): List<String> = withContext(Dispatchers.IO) {
+        if (config.baseUrl.isBlank()) throw ModelListException("Enter a base URL first.")
+        if (!config.hasCredentials) throw ModelListException("Enter an API key first.")
+        val base = config.baseUrl.trimEnd('/')
+        val ids = LinkedHashSet<String>()
+        var cursor: String? = null
+        var pages = 0
+        do {
+            val url = when (config.format) {
+                ApiFormat.Anthropic -> "$base/v1/models?limit=1000" + (cursor?.let { "&after_id=" + enc(it) } ?: "")
+                ApiFormat.OpenAi -> "$base/models"
+                ApiFormat.Gemini -> "$base/v1beta/models?pageSize=1000" + (cursor?.let { "&pageToken=" + enc(it) } ?: "")
+            }
+            val page = getJson(Request.Builder().url(url).auth(config).header("accept", "application/json").get().build())
+            cursor = when (config.format) {
+                ApiFormat.Anthropic -> {
+                    val data = page["data"] as? JsonArray
+                    data?.forEach { m -> (m as? JsonObject)?.string("id")?.let(ids::add) }
+                    if ((page["has_more"] as? JsonPrimitive)?.booleanOrNull == true) page.string("last_id") else null
+                }
+                ApiFormat.OpenAi -> {
+                    // OpenAI and most proxies use {data:[{id}]}; a few local servers return {models:[{name}]}.
+                    val data = (page["data"] ?: page["models"]) as? JsonArray
+                    data?.forEach { m ->
+                        val o = m as? JsonObject
+                        (o?.string("id") ?: o?.string("name") ?: (m as? JsonPrimitive)?.contentOrNull)?.let(ids::add)
+                    }
+                    null
+                }
+                ApiFormat.Gemini -> {
+                    (page["models"] as? JsonArray)?.forEach { m ->
+                        val o = m as? JsonObject ?: return@forEach
+                        val methods = (o["supportedGenerationMethods"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                        if (methods == null || "streamGenerateContent" in methods || "generateContent" in methods) {
+                            o.string("name")?.removePrefix("models/")?.let(ids::add)
+                        }
+                    }
+                    page.string("nextPageToken")?.takeIf { it.isNotBlank() }
+                }
+            }
+            pages++
+        } while (cursor != null && pages < MAX_MODEL_PAGES)
+        if (ids.isEmpty()) throw ModelListException("The endpoint returned no models.")
+        ids.sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    private suspend fun getJson(request: Request): JsonObject {
+        val call = http.newCall(request)
+        return suspendCancellableCoroutine { cont ->
+            cont.invokeOnCancellation { call.cancel() }
+            try {
+                call.execute().use { resp ->
+                    if (!resp.isSuccessful) throw ModelListException(errorMessage(resp))
+                    val raw = resp.body?.string().orEmpty()
+                    val obj = runCatching { json.parseToJsonElement(raw) }.getOrNull()
+                    val parsed = when (obj) {
+                        is JsonObject -> obj
+                        // Some servers answer with a bare array of model objects.
+                        is JsonArray -> JsonObject(mapOf("data" to obj))
+                        else -> throw ModelListException("Unexpected response from ${request.url.host}: ${raw.take(160)}")
+                    }
+                    cont.resume(parsed)
+                }
+            } catch (e: ModelListException) {
+                cont.resumeWithException(e)
+            } catch (e: IOException) {
+                cont.resumeWithException(ModelListException("Network error: ${e.message ?: e.javaClass.simpleName}"))
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- helpers
+
+    /** Adds the credential header the protocol expects; keyless local servers get none. */
+    private fun Request.Builder.auth(config: ProviderConfig): Request.Builder = apply {
+        if (config.format == ApiFormat.Anthropic) header("anthropic-version", ANTHROPIC_VERSION)
+        if (config.apiKey.isBlank()) return@apply
+        when (config.format) {
+            ApiFormat.Anthropic -> header("x-api-key", config.apiKey)
+            ApiFormat.OpenAi -> header("Authorization", "Bearer ${config.apiKey}")
+            ApiFormat.Gemini -> header("x-goog-api-key", config.apiKey)
+        }
+    }
+
+    private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 
     /** Providers require strictly alternating roles starting with a user turn; merge adjacent ones. */
     private fun mergedTurns(turns: List<ChatTurn>): List<ChatTurn> {
@@ -308,5 +410,9 @@ class LlmClient @Inject constructor() {
         /** Models that accept `fallbacks: "default"` for refusal rescue. */
         private val ANTHROPIC_FALLBACK_MODELS = listOf("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-fable-5-2")
         private val JSON_MEDIA = "application/json".toMediaType()
+        private const val MAX_MODEL_PAGES = 10
     }
 }
+
+/** A model-list request failed; [message] is shown to the user as-is. */
+class ModelListException(message: String) : Exception(message)
