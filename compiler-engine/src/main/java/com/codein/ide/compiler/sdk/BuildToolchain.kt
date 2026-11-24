@@ -79,6 +79,22 @@ class BuildToolchain @Inject constructor(
         }.getOrNull()
     }
 
+    /**
+     * `core-lambda-stubs.jar` from the SDK build-tools: declares `java.lang.invoke.LambdaMetafactory`
+     * and `StringConcatFactory`, which android.jar lacks but javac/ECJ reference when compiling
+     * lambdas and string concatenation. Extracted from bundled assets on first use.
+     */
+    fun lambdaStubsJar(): File? {
+        val target = File(sdkRoot, LAMBDA_STUBS_NAME)
+        if (target.isFile) return target
+        return runCatching {
+            val temp = File(sdkRoot, "$LAMBDA_STUBS_NAME.extract")
+            context.assets.open("sdk/$LAMBDA_STUBS_NAME").use { input -> temp.outputStream().use { input.copyTo(it) } }
+            check(temp.renameTo(target)) { "Unable to move $LAMBDA_STUBS_NAME into place" }
+            target
+        }.getOrNull()
+    }
+
     /** Imports an android.jar picked through the Storage Access Framework. Validates its contents. */
     suspend fun importAndroidJar(uri: Uri, api: Int): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
@@ -121,5 +137,6 @@ class BuildToolchain @Inject constructor(
         const val AAPT2_LIB_NAME = "libaapt2.so"
         const val BUNDLED_ANDROID_JAR_ASSET = "sdk/android.jar"
         const val DEFAULT_COMPILE_SDK = 35
+        const val LAMBDA_STUBS_NAME = "core-lambda-stubs.jar"
     }
 }

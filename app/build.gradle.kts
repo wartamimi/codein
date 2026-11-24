@@ -110,16 +110,24 @@ android.sourceSets["main"].assets.srcDir(codeinGeneratedAssets)
 android.sourceSets["main"].jniLibs.srcDir(codeinGeneratedJniLibs)
 
 val bundleAndroidJar = tasks.register("bundleAndroidJar") {
-    val source = androidComponents.sdkComponents.sdkDirectory.map { it.file("platforms/android-35/android.jar").asFile }
-    val target = codeinGeneratedAssets.map { it.file("sdk/android.jar").asFile }
-    inputs.file(source)
-    outputs.file(target)
+    val sdkDir = androidComponents.sdkComponents.sdkDirectory
+    val buildTools = android.buildToolsVersion
+    // android.jar has no java.lang.invoke.LambdaMetafactory; ECJ needs these stubs to compile lambdas.
+    val sources = sdkDir.map {
+        listOf(
+            it.file("platforms/android-35/android.jar").asFile,
+            it.file("build-tools/$buildTools/core-lambda-stubs.jar").asFile,
+        )
+    }
+    val targetDir = codeinGeneratedAssets.map { it.dir("sdk").asFile }
+    inputs.files(sources)
+    outputs.dir(targetDir)
     doLast {
-        val from = source.get()
-        val to = target.get()
-        if (!from.isFile) throw GradleException("android.jar not found at $from. Install platforms;android-35 with sdkmanager.")
-        to.parentFile.mkdirs()
-        from.copyTo(to, overwrite = true)
+        val dir = targetDir.get().apply { mkdirs() }
+        for (from in sources.get()) {
+            if (!from.isFile) throw GradleException("${from.name} not found at $from. Install it with sdkmanager.")
+            from.copyTo(File(dir, from.name), overwrite = true)
+        }
     }
 }
 

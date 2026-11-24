@@ -447,7 +447,7 @@ class BuildOrchestrator @Inject constructor(
             val result = ecj.compile(
                 JavaCompileRequest(
                     sourceFiles = javaFiles,
-                    classpath = ctx.compileJars + listOfNotNull(kotlinOut.takeIf { kotlinFiles.isNotEmpty() }),
+                    classpath = ctx.compileJars + listOfNotNull(kotlinOut.takeIf { kotlinFiles.isNotEmpty() }, toolchain.lambdaStubsJar()),
                     bootClasspath = ctx.androidJar,
                     outputDir = classesOut,
                     debugInfo = !ctx.request.variant.isRelease,
