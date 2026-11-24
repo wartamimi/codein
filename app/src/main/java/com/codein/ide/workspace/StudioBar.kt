@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onPlaced
@@ -324,8 +325,15 @@ private fun EditorTab(
         // Dirty tabs show a dot that turns into the close glyph when the tab is active.
         Box(contentAlignment = Alignment.Center) {
             ToolbarIconButton(CodeinIcons.Close, "Close ${tab.name}", size = 24.dp, iconSize = 14.dp, tint = if (tab.isDirty && !active) Color.Transparent else MaterialTheme.colorScheme.onSurfaceVariant, onClick = onClose)
-            AnimatedVisibility(tab.isDirty && !active, enter = scaleIn(Motion.spatial()) + fadeIn(), exit = scaleOut() + fadeOut()) {
-                Box(Modifier.size(Spacing.sm).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+            val dot by androidx.compose.animation.core.animateFloatAsState(if (tab.isDirty && !active) 1f else 0f, Motion.spatial(), label = "dirty-dot")
+            if (dot > 0.01f) {
+                Box(
+                    Modifier
+                        .size(Spacing.sm)
+                        .graphicsLayer { scaleX = dot; scaleY = dot; alpha = dot }
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
             }
         }
     }
