@@ -1,5 +1,16 @@
 package com.codein.ide.signer.ui
 
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import com.codein.ide.core.ui.theme.metricsTextStyle
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -145,12 +156,31 @@ private fun KeystoreCard(
     }
 }
 
+/** One-tap fingerprint copy chip: shows the algorithm and a shortened hash, flips to "Copied". */
 @Composable
 private fun FingerprintRow(label: String, value: String, onCopy: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(56.dp))
-        Text(value, style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 10.5f, false), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        ToolbarIconButton(CodeinIcons.Copy, "Copy $label", size = 28.dp, onClick = onCopy)
+    var copied by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(copied) {
+        if (copied) { kotlinx.coroutines.delay(1500); copied = false }
+    }
+    val accent = if (copied) CodeinTheme.colors.success else MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clip(shape)
+            .background(CodeinTheme.colors.base)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .clickable(onClickLabel = "Copy $label") { onCopy(); copied = true }
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 12.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = accent, modifier = Modifier.width(64.dp))
+        Text(value, style = metricsTextStyle(CodeinTheme.editorPreferences.codingFont, 10.5f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+        Icon(if (copied) CodeinIcons.Check else CodeinIcons.Copy, null, tint = accent, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -172,9 +202,9 @@ private fun CreateKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
             KeystoreType.entries.forEach { t -> PillChip(t.displayName, selected = f.type == t, onClick = { update { copy(type = t) } }) }
         }
         Field("Display name", f.displayName) { update { copy(displayName = it) } }
-        Field("Key alias", f.alias) { update { copy(alias = it) } }
-        Field("Keystore password", f.storePassword, password = true) { update { copy(storePassword = it) } }
-        if (f.type == KeystoreType.Jks) Field("Key password", f.keyPassword, password = true) { update { copy(keyPassword = it) } }
+        Field("Key alias", f.alias, error = if (f.alias.isBlank()) "Required" else null) { update { copy(alias = it) } }
+        Field("Keystore password", f.storePassword, password = true, error = if (f.storePassword.length < 6) "At least 6 characters" else null) { update { copy(storePassword = it) } }
+        if (f.type == KeystoreType.Jks) Field("Key password", f.keyPassword, password = true, error = if (f.keyPassword.isNotEmpty() && f.keyPassword.length < 6) "At least 6 characters" else null) { update { copy(keyPassword = it) } }
         Text("Key size", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(2048, 4096).forEach { size -> PillChip("RSA $size", selected = f.keySize == size, onClick = { update { copy(keySize = size) } }) }
@@ -187,7 +217,7 @@ private fun CreateKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
         Field("Organization (O)", f.organization) { update { copy(organization = it) } }
         Field("City or locality (L)", f.locality) { update { copy(locality = it) } }
         Field("State or province (ST)", f.state) { update { copy(state = it) } }
-        Field("Country code (C)", f.country) { update { copy(country = it.take(2)) } }
+        Field("Country code (C)", f.country, error = if (f.country.isNotEmpty() && !f.country.matches(Regex("[A-Za-z]{2}"))) "Two letters, e.g. ID" else null) { update { copy(country = it.take(2)) } }
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (state.working) LinearProgressIndicator(Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
@@ -233,11 +263,16 @@ private fun ImportKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
 }
 
 @Composable
-private fun Field(label: String, value: String, password: Boolean = false, onChange: (String) -> Unit) {
+private fun Field(label: String, value: String, password: Boolean = false, error: String? = null, onChange: (String) -> Unit) {
+    // Errors only show once the user has typed, so a fresh form is not a wall of red.
+    val showError = error != null && value.isNotEmpty()
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
+        isError = showError,
+        supportingText = if (showError) ({ Text(error.orEmpty()) }) else null,
+        shape = RoundedCornerShape(10.dp),
         singleLine = true,
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = if (password) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,

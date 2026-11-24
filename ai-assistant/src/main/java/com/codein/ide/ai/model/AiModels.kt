@@ -63,7 +63,7 @@ sealed interface StreamEvent {
 enum class ContextChip(val label: String) {
     CurrentFile("@CurrentFile"),
     Selection("@Selection"),
-    BuildError("@BuildError"),
+    BuildError("@BuildErrors"),
     Gradle("@Gradle"),
     FileTree("@FileTree"),
 }

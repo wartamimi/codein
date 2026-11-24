@@ -1,5 +1,14 @@
 package com.codein.ide.logcat
 
+import com.codein.ide.core.ui.theme.metricsTextStyle
+import com.codein.ide.core.ui.theme.Spacing
+import com.codein.ide.core.ui.components.CompactTextField
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -74,32 +83,40 @@ fun LogcatPanel(
         if (state.autoScroll && visible.isNotEmpty()) listState.scrollToItem(visible.lastIndex)
     }
     Column(modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            LogPriority.entries.filter { it != LogPriority.Assert }.forEach { p ->
-                PillChip(p.name, selected = state.minPriority == p, accent = p.color(), onClick = { onIntent(LogcatIntent.MinPriority(p)) })
+        // Sticky filter bar: regex field, then level pills and stream controls.
+        Column(Modifier.fillMaxWidth().background(CodeinTheme.colors.tier1).padding(top = Spacing.sm)) {
+            Row(Modifier.fillMaxWidth().padding(start = Spacing.md, end = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                CompactTextField(
+                    value = state.filter,
+                    onValueChange = { onIntent(LogcatIntent.Filter(it)) },
+                    placeholder = "Regex filter on tag or message",
+                    leadingIcon = CodeinIcons.Filter,
+                    isError = state.filterError != null,
+                    textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 12f, false),
+                    modifier = Modifier.weight(1f),
+                )
+                ToolbarIconButton(if (state.paused) CodeinIcons.Play else CodeinIcons.Pause, if (state.paused) "Resume" else "Pause", size = 28.dp, active = state.paused) { onIntent(LogcatIntent.TogglePause) }
+                ToolbarIconButton(CodeinIcons.ScrollLock, if (state.autoScroll) "Auto-scroll on" else "Auto-scroll off", size = 28.dp, active = state.autoScroll) { onIntent(LogcatIntent.AutoScroll(!state.autoScroll)) }
+                ToolbarIconButton(CodeinIcons.Trash, "Clear", size = 28.dp) { onIntent(LogcatIntent.Clear) }
             }
-            PidChip(state, onIntent)
-            ToolbarIconButton(if (state.paused) CodeinIcons.Play else CodeinIcons.Pause, if (state.paused) "Resume" else "Pause", size = 32.dp, active = state.paused) { onIntent(LogcatIntent.TogglePause) }
-            ToolbarIconButton(CodeinIcons.ArrowDown, "Auto-scroll", size = 32.dp, active = state.autoScroll) { onIntent(LogcatIntent.AutoScroll(!state.autoScroll)) }
-            ToolbarIconButton(CodeinIcons.Trash, "Clear", size = 32.dp) { onIntent(LogcatIntent.Clear) }
-            CountBadge("${visible.size}/${state.entries.size}", MaterialTheme.colorScheme.onSurfaceVariant)
+            state.filterError?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs))
+            }
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LogPriority.entries.filter { it != LogPriority.Assert }.forEach { p ->
+                    LevelToggle(p, selected = state.minPriority == p) { onIntent(LogcatIntent.MinPriority(p)) }
+                }
+                Spacer(Modifier.width(Spacing.xs))
+                PidChip(state, onIntent)
+                CountBadge("${visible.size}/${state.entries.size}", MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Hairline()
         }
-        OutlinedTextField(
-            value = state.filter,
-            onValueChange = { onIntent(LogcatIntent.Filter(it)) },
-            singleLine = true,
-            isError = state.filterError != null,
-            placeholder = { Text("Regex filter on tag or message") },
-            supportingText = state.filterError?.let { { Text(it) } },
-            textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 12f, false),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        )
         if (!state.canReadAllLogs) ReadLogsBanner(grantCommand)
-        Hairline()
         if (visible.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 EmptyState(
@@ -109,27 +126,51 @@ fun LogcatPanel(
                 )
             }
         } else {
-            val style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 11.5f, false)
-            LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            val font = CodeinTheme.editorPreferences.codingFont
+            val style = codeTextStyle(font, 11.5f, false)
+            val stamp = metricsTextStyle(font, 11f)
+            LazyColumn(Modifier.fillMaxSize().background(CodeinTheme.colors.base), state = listState, contentPadding = PaddingValues(vertical = Spacing.xs)) {
                 items(visible, key = { it.id }) { e ->
                     val color = e.priority.color()
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .background(if (e.priority.ordinal >= LogPriority.Error.ordinal) color.copy(alpha = 0.08f) else Color.Transparent)
-                            .padding(horizontal = 8.dp, vertical = 1.dp),
+                            .padding(horizontal = Spacing.sm, vertical = 2.dp),
+                        verticalAlignment = Alignment.Top,
                     ) {
-                        Text(e.timestamp.substringAfter(' '), style = style, color = CodeinTheme.colors.textMuted)
-                        Spacer(Modifier.width(6.dp))
-                        Text(e.priority.letter.toString(), style = style, color = color, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(6.dp))
-                        Text(e.tag, style = style, color = color, maxLines = 1, modifier = Modifier.width(110.dp))
-                        Spacer(Modifier.width(6.dp))
+                        Text(e.timestamp.substringAfter(' '), style = stamp, color = CodeinTheme.colors.textMuted)
+                        Spacer(Modifier.width(Spacing.sm))
+                        Box(
+                            Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(e.priority.letter.toString(), style = stamp, color = color, fontWeight = FontWeight.Bold) }
+                        Spacer(Modifier.width(Spacing.sm))
+                        Text(e.tag, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(104.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(e.message, style = style, color = if (e.priority.ordinal >= LogPriority.Warn.ordinal) color else MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
         }
+    }
+}
+
+/** Compact colored level tag (V / D / I / W / E) that selects the minimum priority. */
+@Composable
+private fun LevelToggle(priority: LogPriority, selected: Boolean, onClick: () -> Unit) {
+    val color = priority.color()
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        Modifier
+            .size(width = 36.dp, height = 28.dp)
+            .clip(shape)
+            .background(if (selected) color.copy(alpha = 0.22f) else CodeinTheme.colors.tier2)
+            .border(1.dp, if (selected) color.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outlineVariant, shape)
+            .clickable(onClickLabel = "Show ${priority.name} and above", onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(priority.letter.toString(), style = metricsTextStyle(CodeinTheme.editorPreferences.codingFont, 12f), color = color, fontWeight = FontWeight.Bold)
     }
 }
 

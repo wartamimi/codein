@@ -1,5 +1,8 @@
 package com.codein.ide.ai.ui
 
+import androidx.compose.material3.HorizontalDivider
+import com.codein.ide.core.ui.theme.metricsTextStyle
+import com.codein.ide.core.ui.theme.Spacing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -387,31 +390,40 @@ private fun DiffCard(block: MdBlock.Diff, onApplyDiff: (FilePatch) -> Unit) {
                 Spacer(Modifier.width(4.dp))
                 CountBadge("−${patch.deletions}", removeColor)
                 Spacer(Modifier.width(6.dp))
-                PillChip("Apply diff", icon = CodeinIcons.Check, selected = true, onClick = if (block.complete) ({ onApplyDiff(patch) }) else null)
+                Spacer(Modifier.width(2.dp))
             }
-            Column(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
+            Column(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = Spacing.xs)) {
+                val gutter = metricsTextStyle(prefs.codingFont, 11f)
                 patch.hunks.forEach { hunk ->
                     Text(
                         "@@ -${hunk.oldStart.coerceAtLeast(0)},${hunk.oldCount} +${hunk.newStart.coerceAtLeast(0)},${hunk.newCount} @@",
                         style = style,
                         color = scheme.comment,
-                        modifier = Modifier.padding(horizontal = 10.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp),
                     )
+                    var oldLine = hunk.oldStart.coerceAtLeast(1)
+                    var newLine = hunk.newStart.coerceAtLeast(1)
                     hunk.lines.forEach { line ->
                         val (prefix, color, bg) = when (line.kind) {
                             HunkLine.Kind.Add -> Triple("+", addColor, addColor.copy(alpha = 0.12f))
                             HunkLine.Kind.Remove -> Triple("-", removeColor, removeColor.copy(alpha = 0.12f))
                             HunkLine.Kind.Context -> Triple(" ", scheme.foreground, Color.Transparent)
                         }
-                        Text(
-                            prefix + line.text,
-                            style = style,
-                            color = color,
-                            softWrap = false,
-                            modifier = Modifier.background(bg).padding(horizontal = 10.dp).widthIn(min = 600.dp),
-                        )
+                        val oldNo = if (line.kind != HunkLine.Kind.Add) (oldLine++).toString() else ""
+                        val newNo = if (line.kind != HunkLine.Kind.Remove) (newLine++).toString() else ""
+                        Row(Modifier.background(bg).widthIn(min = 600.dp)) {
+                            Text(oldNo.padStart(4), style = gutter, color = scheme.lineNumber, modifier = Modifier.padding(start = Spacing.sm))
+                            Text(newNo.padStart(4), style = gutter, color = scheme.lineNumber, modifier = Modifier.padding(start = Spacing.xs))
+                            Text(" $prefix ", style = style, color = color)
+                            Text(line.text, style = style, color = color, softWrap = false, modifier = Modifier.padding(end = Spacing.sm))
+                        }
                     }
                 }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.xs), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                if (!block.complete) Text("Streaming…", style = MaterialTheme.typography.labelMedium, color = CodeinTheme.colors.textMuted, modifier = Modifier.weight(1f))
+                PillChip("Apply to Editor", icon = CodeinIcons.Check, selected = block.complete, onClick = if (block.complete) ({ onApplyDiff(patch) }) else null)
             }
         }
     }

@@ -1,5 +1,8 @@
 package com.codein.ide.maven.ui
 
+import com.codein.ide.core.ui.theme.Spacing
+import com.codein.ide.core.ui.components.CompactTextField
+import com.codein.ide.core.ui.components.SegmentedTabs
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -66,14 +69,14 @@ fun DependencyExplorerScreen(
         PanelHeader(title = "Maven Dependencies", icon = CodeinIcons.Package) {
             ToolbarIconButton(CodeinIcons.Refresh, "Resolve dependency tree", size = 32.dp) { onIntent(DependencyExplorerIntent.ResolveTree) }
         }
-        TabRow(
-            selectedTabIndex = tab,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            contentColor = MaterialTheme.colorScheme.primary,
-        ) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Search", style = MaterialTheme.typography.labelLarge) })
-            Tab(selected = tab == 1, onClick = { tab = 1; if (state.tree.isEmpty()) onIntent(DependencyExplorerIntent.ResolveTree) }, text = { Text("Resolved tree", style = MaterialTheme.typography.labelLarge) })
-        }
+        SegmentedTabs(
+            items = listOf(0, 1),
+            selected = tab,
+            onSelect = { t -> tab = t; if (t == 1 && state.tree.isEmpty()) onIntent(DependencyExplorerIntent.ResolveTree) },
+            icon = { if (it == 0) CodeinIcons.Search else CodeinIcons.Layers },
+            label = { if (it == 0) "Search" else "Resolved tree" },
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        )
         when (tab) {
             0 -> SearchTab(state, onIntent)
             else -> TreeTab(state)
@@ -84,19 +87,12 @@ fun DependencyExplorerScreen(
 @Composable
 private fun SearchTab(state: DependencyExplorerState, onIntent: (DependencyExplorerIntent) -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(
+        CompactTextField(
             value = state.query,
             onValueChange = { onIntent(DependencyExplorerIntent.QueryChanged(it)) },
-            placeholder = { Text("Search artifacts, e.g. retrofit or androidx.room") },
-            leadingIcon = { Icon(CodeinIcons.Search, null, Modifier.size(18.dp)) },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            placeholder = "Search artifacts, e.g. retrofit",
+            leadingIcon = CodeinIcons.Search,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
         )
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
