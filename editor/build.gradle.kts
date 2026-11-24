@@ -33,7 +33,7 @@ kotlin {
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":core-ui"))
-    implementation(platform(libs.sora.editor.bom))
+    api(platform(libs.sora.editor.bom))
     api(libs.sora.editor)
     api(libs.sora.language.textmate)
     implementation(platform(libs.androidx.compose.bom))
