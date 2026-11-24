@@ -130,31 +130,54 @@ class ZipAligner @Inject constructor() {
     }
 }
 
-/** Scans local file headers to compute each entry's data offset. */
+/**
+ * Computes each entry's data offset from the central directory (which always carries the real
+ * local-header offsets and sizes, unlike local headers written with data descriptors).
+ */
 internal object LocalHeaderScanner {
     fun dataOffsets(raf: java.io.RandomAccessFile): Map<String, Long> {
         val result = mutableMapOf<String, Long>()
-        var pos = 0L
-        val header = ByteArray(30)
-        while (pos + 30 <= raf.length()) {
-            raf.seek(pos)
-            raf.readFully(header)
-            val sig = le32(header, 0)
-            if (sig != 0x04034b50L) break
-            val flags = le16(header, 6)
-            val compressedSize = le32(header, 18)
-            val nameLen = le16(header, 26)
-            val extraLen = le16(header, 28)
-            val nameBytes = ByteArray(nameLen)
-            raf.readFully(nameBytes)
-            val dataStart = pos + 30 + nameLen + extraLen
-            result[String(nameBytes, Charsets.UTF_8)] = dataStart
-            var next = dataStart + compressedSize
-            if (flags and 0x08 != 0) next += 16
-            pos = next
+        val length = raf.length()
+        if (length < EOCD_SIZE) return result
+        // Locate the End Of Central Directory record (it may be followed by a comment of up to 64 KiB).
+        val searchLen = minOf(length, (EOCD_SIZE + 0xFFFF).toLong()).toInt()
+        val tail = ByteArray(searchLen)
+        raf.seek(length - searchLen)
+        raf.readFully(tail)
+        var eocd = -1
+        var i = searchLen - EOCD_SIZE
+        while (i >= 0) {
+            if (le32(tail, i) == 0x06054b50L) { eocd = i; break }
+            i--
+        }
+        if (eocd < 0) return result
+        val entryCount = le16(tail, eocd + 10)
+        val cdSize = le32(tail, eocd + 12)
+        val cdOffset = le32(tail, eocd + 16)
+        val cd = ByteArray(cdSize.toInt())
+        raf.seek(cdOffset)
+        raf.readFully(cd)
+        val local = ByteArray(LOCAL_HEADER_SIZE)
+        var p = 0
+        repeat(entryCount) {
+            if (p + 46 > cd.size || le32(cd, p) != 0x02014b50L) return result
+            val nameLen = le16(cd, p + 28)
+            val extraLen = le16(cd, p + 30)
+            val commentLen = le16(cd, p + 32)
+            val localOffset = le32(cd, p + 42)
+            val name = String(cd, p + 46, nameLen, Charsets.UTF_8)
+            raf.seek(localOffset)
+            raf.readFully(local)
+            if (le32(local, 0) == 0x04034b50L) {
+                result[name] = localOffset + LOCAL_HEADER_SIZE + le16(local, 26) + le16(local, 28)
+            }
+            p += 46 + nameLen + extraLen + commentLen
         }
         return result
     }
+
+    private const val EOCD_SIZE = 22
+    private const val LOCAL_HEADER_SIZE = 30
 
     private fun le16(b: ByteArray, o: Int) = (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8)
     private fun le32(b: ByteArray, o: Int) =
