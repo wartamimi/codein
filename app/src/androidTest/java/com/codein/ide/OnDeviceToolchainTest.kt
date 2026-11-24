@@ -16,6 +16,7 @@ import com.codein.ide.project.ProjectSpec
 import com.codein.ide.project.ProjectTemplate
 import com.codein.ide.project.ProjectTemplates
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -105,15 +106,15 @@ class OnDeviceToolchainTest {
             File(dir, path).apply { parentFile?.mkdirs(); writeText(content) }
         }
         val label = spec.packageName.substringAfterLast('.')
-        val events = entryPoint.buildOrchestrator().build(BuildRequest(dir)).toList()
-        events.forEach { e ->
+        // Log while the build runs, so a crash mid-build still shows how far it got.
+        val events = entryPoint.buildOrchestrator().build(BuildRequest(dir)).onEach { e ->
             when (e) {
                 is BuildEvent.Log -> Log.i(TAG, "[$label/${e.step?.name}] ${e.message}")
                 is BuildEvent.Diagnostic -> Log.w(TAG, "[$label/${e.step.name}] ${e.diagnostic}")
                 is BuildEvent.StepFinished -> Log.i(TAG, "$label step ${e.step.name}: ${e.status} in ${e.durationMillis} ms")
                 else -> Unit
             }
-        }
+        }.toList()
         val result = events.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result
         when (result) {
             is BuildResult.Success -> Unit
