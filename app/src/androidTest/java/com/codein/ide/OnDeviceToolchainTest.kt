@@ -65,7 +65,7 @@ class OnDeviceToolchainTest {
     }
 
     @Test
-    fun buildsJavaViewsProjectIntoSignedApk() = runBlocking {
+    fun buildsJavaViewsProjectIntoSignedApk(): Unit = runBlocking {
         val spec = ProjectSpec(
             name = "Smoke",
             packageName = "com.example.smoke",
