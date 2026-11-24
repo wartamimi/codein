@@ -208,7 +208,7 @@ fun WorkspaceScreen(
                 DockTab.Build -> BuildConsole(state.build, state.toolchain, onIntent, aiFix, onOpenSettings, modifier)
                 DockTab.Logcat -> {
                     val logcat by logcatViewModel.state.collectAsStateWithLifecycle()
-                    LogcatPanel(logcat, logcatViewModel::onIntent, logcatViewModel::start, logcatViewModel::stop, modifier)
+                    LogcatPanel(logcat, logcatViewModel::onIntent, logcatViewModel::start, logcatViewModel::stop, modifier, grantCommand = logcatViewModel.grantCommand)
                 }
                 DockTab.Ai -> {
                     val ai by aiViewModel.state.collectAsStateWithLifecycle()

@@ -23,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
@@ -46,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.codein.ide.ai.ui.AiProviderSettings
 import com.codein.ide.ai.ui.AiSettingsViewModel
+import com.codein.ide.compiler.kotlin.KotlinToolchainInstaller
 import com.codein.ide.compiler.sdk.BuildToolchain
 import com.codein.ide.compiler.sdk.ToolchainStatus
 import com.codein.ide.core.ui.components.CodeinCard
@@ -68,25 +71,38 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val toolchain: BuildToolchain,
+    private val kotlinInstaller: KotlinToolchainInstaller,
     private val preferencesRepository: EditorPreferencesRepository,
 ) : ViewModel() {
 
-    private val _status = MutableStateFlow(toolchain.status())
+    private val _status = MutableStateFlow(ToolchainStatus(null, null, null))
     val status: StateFlow<ToolchainStatus> = _status.asStateFlow()
 
-    private val _kotlinJars = MutableStateFlow(listKotlinJars())
+    private val _kotlinJars = MutableStateFlow<List<String>>(emptyList())
     val kotlinJars: StateFlow<List<String>> = _kotlinJars.asStateFlow()
 
     val preferences: StateFlow<EditorPreferences> = preferencesRepository.preferences.stateIn(viewModelScope, SharingStarted.Eagerly, EditorPreferences())
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    /** Non-null while the Kotlin toolchain download runs: label and 0..1 progress. */
+    private val _kotlinDownload = MutableStateFlow<Pair<String, Float>?>(null)
+    val kotlinDownload: StateFlow<Pair<String, Float>?> = _kotlinDownload.asStateFlow()
+    private var downloadJob: Job? = null
+
+    init {
+        refresh()
+    }
 
     val nativeLibraryDir: String get() = toolchain.aapt2Binary()?.parent ?: "nativeLibraryDir"
 
@@ -105,6 +121,27 @@ class SettingsViewModel @Inject constructor(
         }
         _messages.emit("Imported $ok of ${uris.size} Kotlin compiler jar(s)")
         refresh()
+    }
+
+    fun downloadKotlinCompiler(includeCompose: Boolean) {
+        if (downloadJob?.isActive == true) return
+        downloadJob = viewModelScope.launch {
+            _kotlinDownload.value = "Connecting to Maven Central" to 0f
+            val result = kotlinInstaller.install(includeCompose) { p ->
+                _kotlinDownload.value = "${p.artifact} (${p.index}/${p.total})" to p.fraction
+            }
+            _kotlinDownload.value = null
+            result.fold(
+                onSuccess = { _messages.emit("Kotlin compiler ${KotlinToolchainInstaller.KOTLIN_VERSION} installed (${it.size} jars)") },
+                onFailure = { _messages.emit("Download failed: ${it.message}") },
+            )
+            refresh()
+        }
+    }
+
+    fun cancelKotlinDownload() {
+        downloadJob?.cancel()
+        _kotlinDownload.value = null
     }
 
     fun clearKotlinCompiler() = viewModelScope.launch {
@@ -131,8 +168,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _status.value = toolchain.status()
-        _kotlinJars.value = listKotlinJars()
+        viewModelScope.launch {
+            val (status, jars) = withContext(Dispatchers.IO) { toolchain.status() to listKotlinJars() }
+            _status.value = status
+            _kotlinJars.value = jars
+        }
     }
 
     private fun listKotlinJars(): List<String> =
@@ -200,6 +240,8 @@ fun SettingsScreen(
 private fun ToolchainSection(viewModel: SettingsViewModel) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val jars by viewModel.kotlinJars.collectAsStateWithLifecycle()
+    val download by viewModel.kotlinDownload.collectAsStateWithLifecycle()
+    var withCompose by rememberSaveable { mutableStateOf(true) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val androidJarPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::importAndroidJar) }
     val kotlinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -221,28 +263,48 @@ private fun ToolchainSection(viewModel: SettingsViewModel) {
             title = "AAPT2",
             ok = status.aapt2 != null,
             detail = status.aapt2?.absolutePath
-                ?: "Not bundled in this build. Place an ARM64/x86_64 aapt2 binary named libaapt2.so in app/src/main/jniLibs/<abi>/ and rebuild Codein; Android only lets apps execute binaries from ${viewModel.nativeLibraryDir}.",
+                ?: "This build of Codein shipped without aapt2 for this CPU (it is bundled for arm64-v8a and x86_64). Android only lets apps execute binaries from ${viewModel.nativeLibraryDir}, so it cannot be added at runtime.",
         )
         ToolCard(
             title = "android.jar (platform stubs)",
             ok = status.androidJar != null,
             detail = status.androidJar?.let { "${it.absolutePath} · ${it.length() / 1024} KB" }
-                ?: "Import platforms/android-35/android.jar from an Android SDK. It is copied into app-private storage.",
+                ?: "Bundled with Codein and extracted on first use. You can also import another platforms/android-<api>/android.jar.",
         ) {
             Button(onClick = { androidJarPicker.launch(arrayOf("application/java-archive", "application/zip", "application/octet-stream")) }) {
                 Text(if (status.androidJar != null) "Replace android.jar" else "Import android.jar")
             }
         }
         ToolCard(
-            title = "Kotlin compiler (optional)",
-            ok = jars.isNotEmpty(),
+            title = "Kotlin compiler",
+            ok = jars.any { it.startsWith("kotlin-compiler") },
             detail = if (jars.isEmpty()) {
-                "Kotlin sources need kotlin-compiler-embeddable plus kotlin-stdlib, kotlin-script-runtime, kotlin-reflect, kotlinx-coroutines-core-jvm, trove4j and annotations jars (and the Compose compiler plugin for Compose projects). They are dexed on first use."
+                "Needed only for Kotlin projects. Codein downloads kotlin-compiler-embeddable ${KotlinToolchainInstaller.KOTLIN_VERSION} and its runtime jars from Maven Central (about 70 MB, checksums verified) and converts them for ART on the first Kotlin build. Running kotlinc on Android is experimental and needs plenty of free RAM."
             } else jars.joinToString("\n"),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { kotlinPicker.launch(arrayOf("application/java-archive", "application/zip", "application/octet-stream")) }) { Text("Import jars") }
-                if (jars.isNotEmpty()) OutlinedButton(onClick = { viewModel.clearKotlinCompiler() }) { Text("Remove") }
+            val progress = download
+            if (progress != null) {
+                Text(progress.first, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.size(4.dp))
+                LinearProgressIndicator(progress = { progress.second }, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.size(8.dp))
+                OutlinedButton(onClick = { viewModel.cancelKotlinDownload() }) { Text("Cancel") }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Include Jetpack Compose compiler plugin", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Switch(checked = withCompose, onCheckedChange = { withCompose = it })
+                }
+                Spacer(Modifier.size(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { viewModel.downloadKotlinCompiler(withCompose) }) {
+                        Text(if (jars.isEmpty()) "Download Kotlin compiler" else "Download missing jars")
+                    }
+                    OutlinedButton(onClick = { kotlinPicker.launch(arrayOf("application/java-archive", "application/zip", "application/octet-stream")) }) { Text("Import jars") }
+                }
+                if (jars.isNotEmpty()) {
+                    Spacer(Modifier.size(8.dp))
+                    OutlinedButton(onClick = { viewModel.clearKotlinCompiler() }) { Text("Remove") }
+                }
             }
         }
         ToolCard(title = "Java compiler (ECJ), D8, apksig, bundletool", ok = true, detail = "Bundled with Codein and always available.")

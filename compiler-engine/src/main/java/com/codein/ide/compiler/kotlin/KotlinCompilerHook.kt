@@ -65,9 +65,8 @@ class KotlinCompilerHook @Inject constructor(
     override fun isAvailable(): Boolean = compilerJars().any { it.name.startsWith("kotlin-compiler") }
 
     override fun unavailableReason(): String =
-        "Kotlin sources found but no Kotlin compiler is installed. Import kotlin-compiler-embeddable.jar and " +
-            "its runtime jars (kotlin-stdlib, kotlin-reflect, kotlin-script-runtime, kotlin-daemon-embeddable, " +
-            "trove4j, kotlinx-coroutines-core-jvm) in Settings > Toolchain > Kotlin compiler."
+        "Kotlin sources found but no Kotlin compiler is installed. Open Settings > Toolchain and tap " +
+            "Download Kotlin compiler (it is fetched from Maven Central once)."
 
     private suspend fun loader(onLog: (String) -> Unit): ClassLoader = loaderMutex.withLock {
         val jars = compilerJars()

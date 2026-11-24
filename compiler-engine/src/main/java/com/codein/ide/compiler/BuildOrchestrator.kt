@@ -423,7 +423,7 @@ class BuildOrchestrator @Inject constructor(
             if (!kotlinCompiler.isAvailable()) fail(step, DiagnosticSource.Kotlin, kotlinCompiler.unavailableReason())
             val composePlugin = toolchain.kotlinCompilerDir.listFiles { f -> f.name.startsWith("kotlin-compose-compiler-plugin") && f.extension == "jar" }?.firstOrNull()
             if (ctx.config.usesCompose && composePlugin == null) {
-                fail(step, DiagnosticSource.Kotlin, "This module uses Jetpack Compose. Import kotlin-compose-compiler-plugin-embeddable.jar into the Kotlin toolchain directory.")
+                fail(step, DiagnosticSource.Kotlin, "This module uses Jetpack Compose. Open Settings > Toolchain and download the Kotlin compiler with the Compose plugin.")
             }
             log(step, "Compiling ${kotlinFiles.size} Kotlin file(s)")
             val result = kotlinCompiler.compile(

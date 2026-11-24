@@ -126,7 +126,51 @@ class D8Dexer @Inject constructor() {
                 .setOutput(output.toPath(), OutputMode.DexIndexed)
                 .build()
         }
-        DexResult(ok, listOf(output), diagnostics)
+        if (ok) {
+            runCatching { mergeResources(output, jars) }.onFailure {
+                diagnostics += CompilerDiagnostic(DiagnosticSource.D8, Severity.Error, "Failed to copy jar resources: ${it.message}")
+            }
+        }
+        DexResult(ok && diagnostics.none { it.severity == Severity.Error }, listOf(output), diagnostics)
+    }
+
+    /**
+     * D8's archive output only contains `classes*.dex`. Tools loaded through a DexClassLoader (the
+     * Kotlin compiler in particular) also need their non-class resources: `META-INF/services`,
+     * extension XML descriptors and message bundles. This copies them in, first occurrence wins.
+     */
+    private fun mergeResources(archive: File, jars: List<File>) {
+        val merged = File(archive.parentFile, archive.name + ".merge")
+        val seen = HashSet<String>()
+        java.util.zip.ZipOutputStream(merged.outputStream().buffered()).use { out ->
+            java.util.zip.ZipFile(archive).use { dex ->
+                for (entry in dex.entries()) {
+                    if (entry.isDirectory || !seen.add(entry.name)) continue
+                    out.putNextEntry(java.util.zip.ZipEntry(entry.name))
+                    dex.getInputStream(entry).use { it.copyTo(out) }
+                    out.closeEntry()
+                }
+            }
+            for (jar in jars) {
+                java.util.zip.ZipFile(jar).use { zip ->
+                    for (entry in zip.entries()) {
+                        val name = entry.name
+                        if (entry.isDirectory || name.endsWith(".class") || isSignatureFile(name) || !seen.add(name)) continue
+                        out.putNextEntry(java.util.zip.ZipEntry(name))
+                        zip.getInputStream(entry).use { it.copyTo(out) }
+                        out.closeEntry()
+                    }
+                }
+            }
+        }
+        if (archive.exists()) archive.delete()
+        check(merged.renameTo(archive)) { "Unable to replace ${archive.name}" }
+    }
+
+    private fun isSignatureFile(name: String): Boolean {
+        val upper = name.uppercase()
+        return upper == "META-INF/MANIFEST.MF" ||
+            (upper.startsWith("META-INF/") && (upper.endsWith(".SF") || upper.endsWith(".RSA") || upper.endsWith(".DSA") || upper.endsWith(".EC")))
     }
 
     private inline fun runD8(handler: CollectingHandler, command: () -> D8Command): Boolean = try {

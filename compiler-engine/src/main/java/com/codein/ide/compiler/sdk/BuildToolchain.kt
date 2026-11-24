@@ -68,10 +68,13 @@ class BuildToolchain @Inject constructor(
     private fun extractBundledAndroidJar(api: Int): File? {
         val target = File(platformDir(api), "android.jar")
         return runCatching {
+            target.parentFile?.mkdirs()
+            val temp = File(target.parentFile, "android.jar.extract")
             context.assets.open(BUNDLED_ANDROID_JAR_ASSET).use { input ->
-                target.parentFile?.mkdirs()
-                target.outputStream().use { input.copyTo(it) }
+                temp.outputStream().use { input.copyTo(it) }
             }
+            if (target.exists()) target.delete()
+            check(temp.renameTo(target)) { "Unable to move android.jar into place" }
             target
         }.getOrNull()
     }

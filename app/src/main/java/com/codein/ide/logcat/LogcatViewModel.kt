@@ -1,6 +1,10 @@
 package com.codein.ide.logcat
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -22,6 +26,8 @@ data class LogcatState(
     val paused: Boolean = false,
     val running: Boolean = false,
     val autoScroll: Boolean = true,
+    /** True when READ_LOGS is granted, so other apps' logs (e.g. an app you just installed) are visible. */
+    val canReadAllLogs: Boolean = false,
 ) {
     private val regex: Regex? = if (filter.isBlank()) null else runCatching { Regex(filter, RegexOption.IGNORE_CASE) }.getOrNull()
 
@@ -43,7 +49,10 @@ sealed interface LogcatIntent {
 }
 
 @HiltViewModel
-class LogcatViewModel @Inject constructor(private val reader: LogcatReader) : ViewModel() {
+class LogcatViewModel @Inject constructor(
+    private val reader: LogcatReader,
+    @ApplicationContext private val context: Context,
+) : ViewModel() {
 
     private val _state = MutableStateFlow(LogcatState())
     val state: StateFlow<LogcatState> = _state.asStateFlow()
@@ -52,7 +61,8 @@ class LogcatViewModel @Inject constructor(private val reader: LogcatReader) : Vi
 
     fun start() {
         if (job?.isActive == true) return
-        _state.update { it.copy(running = true) }
+        val granted = context.checkSelfPermission(Manifest.permission.READ_LOGS) == PackageManager.PERMISSION_GRANTED
+        _state.update { it.copy(running = true, canReadAllLogs = granted) }
         job = viewModelScope.launch {
             var lastFlush = 0L
             reader.stream().collect { entry ->
@@ -68,6 +78,9 @@ class LogcatViewModel @Inject constructor(private val reader: LogcatReader) : Vi
             _state.update { it.copy(running = false) }
         }
     }
+
+    /** The adb command that grants READ_LOGS to this installation of Codein. */
+    val grantCommand: String get() = "adb shell pm grant ${context.packageName} android.permission.READ_LOGS"
 
     fun stop() {
         job?.cancel()

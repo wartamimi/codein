@@ -52,6 +52,8 @@ android {
             // Build tools (libaapt2.so) must be extracted to nativeLibraryDir so they
             // can be executed under Android 10+ W^X rules.
             useLegacyPackaging = true
+            // libaapt2.so is a static executable, not a JNI library: never strip it.
+            keepDebugSymbols += "**/libaapt2.so"
         }
         resources {
             excludes += setOf(
@@ -86,6 +88,95 @@ android {
 kotlin {
     jvmToolchain(17)
 }
+
+// ---------------------------------------------------------------------------------------------
+// Bundled build toolchain
+//
+// * android.jar is copied from the Android SDK used to build Codein (platforms/android-35) into
+//   assets/sdk/android.jar, so on-device builds work without a manual import.
+// * aapt2 is a fully static Android executable from github.com/lzhiyong/android-sdk-tools
+//   (Apache-2.0, built from AOSP). It ships as lib/<abi>/libaapt2.so so Android extracts it into
+//   nativeLibraryDir, the only place an app may execute binaries from on Android 10+.
+// ---------------------------------------------------------------------------------------------
+
+val codeinGeneratedAssets = layout.buildDirectory.dir("generated/codein/assets")
+val codeinGeneratedJniLibs = layout.buildDirectory.dir("generated/codein/jniLibs")
+
+android.sourceSets["main"].assets.srcDir(codeinGeneratedAssets)
+android.sourceSets["main"].jniLibs.srcDir(codeinGeneratedJniLibs)
+
+val bundleAndroidJar = tasks.register("bundleAndroidJar") {
+    val source = androidComponents.sdkComponents.sdkDirectory.map { it.file("platforms/android-35/android.jar").asFile }
+    val target = codeinGeneratedAssets.map { it.file("sdk/android.jar").asFile }
+    inputs.file(source)
+    outputs.file(target)
+    doLast {
+        val from = source.get()
+        val to = target.get()
+        if (!from.isFile) throw GradleException("android.jar not found at $from. Install platforms;android-35 with sdkmanager.")
+        to.parentFile.mkdirs()
+        from.copyTo(to, overwrite = true)
+    }
+}
+
+val aapt2Release = providers.gradleProperty("codein.aapt2.release").orElse("latest")
+val fetchAapt2 = tasks.register("fetchAapt2") {
+    val outDir = codeinGeneratedJniLibs.map { it.asFile }
+    val release = aapt2Release
+    val required = providers.environmentVariable("CI").map { it.isNotBlank() }.orElse(false)
+    inputs.property("release", release)
+    outputs.dir(outDir)
+    doLast {
+        val abis = mapOf("arm64-v8a" to "aarch64", "x86_64" to "x86_64")
+        val base = if (release.get() == "latest") {
+            "https://github.com/lzhiyong/android-sdk-tools/releases/latest/download"
+        } else {
+            "https://github.com/lzhiyong/android-sdk-tools/releases/download/${release.get()}"
+        }
+        for ((abi, arch) in abis) {
+            val target = File(outDir.get(), "$abi/libaapt2.so")
+            if (target.isFile && target.length() > 0) continue
+            val manual = file("src/main/jniLibs/$abi/libaapt2.so")
+            if (manual.isFile) continue
+            val zipFile = File(temporaryDir, "android-sdk-tools-static-$arch.zip")
+            try {
+                var url = java.net.URL("$base/android-sdk-tools-static-$arch.zip")
+                var redirects = 0
+                while (true) {
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.instanceFollowRedirects = false
+                    conn.connectTimeout = 30_000
+                    conn.readTimeout = 180_000
+                    val code = conn.responseCode
+                    if (code in 300..399) {
+                        url = java.net.URL(url, conn.getHeaderField("Location"))
+                        conn.disconnect()
+                        if (++redirects > 10) throw GradleException("Too many redirects for aapt2 download")
+                        continue
+                    }
+                    if (code != 200) throw GradleException("HTTP $code downloading $url")
+                    conn.inputStream.use { input -> zipFile.outputStream().use { input.copyTo(it) } }
+                    break
+                }
+                java.util.zip.ZipFile(zipFile).use { zip ->
+                    val entry = zip.entries().asSequence().firstOrNull { !it.isDirectory && it.name.substringAfterLast('/') == "aapt2" }
+                        ?: throw GradleException("aapt2 not found inside ${zipFile.name}")
+                    target.parentFile.mkdirs()
+                    zip.getInputStream(entry).use { input -> target.outputStream().use { input.copyTo(it) } }
+                }
+                logger.lifecycle("Bundled aapt2 for $abi (${target.length() / 1024} KB)")
+            } catch (e: Exception) {
+                target.delete()
+                if (required.get()) throw GradleException("Failed to fetch aapt2 for $abi: ${e.message}", e)
+                logger.warn("Codein: could not fetch aapt2 for $abi (${e.message}). Resource builds will be unavailable in this APK.")
+            } finally {
+                zipFile.delete()
+            }
+        }
+    }
+}
+
+tasks.named("preBuild") { dependsOn(bundleAndroidJar, fetchAapt2) }
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")

@@ -1,6 +1,10 @@
 package com.codein.ide.logcat
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +56,14 @@ fun LogPriority.color(): Color = when (this) {
 
 /** Logcat tab: level pills, regex filter, PID lock, pause/clear and a virtualized log list. */
 @Composable
-fun LogcatPanel(state: LogcatState, onIntent: (LogcatIntent) -> Unit, onStart: () -> Unit, onStop: () -> Unit, modifier: Modifier = Modifier) {
+fun LogcatPanel(
+    state: LogcatState,
+    onIntent: (LogcatIntent) -> Unit,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+    grantCommand: String = "adb shell pm grant com.codein.ide android.permission.READ_LOGS",
+) {
     DisposableEffect(Unit) {
         onStart()
         onDispose { onStop() }
@@ -87,13 +98,14 @@ fun LogcatPanel(state: LogcatState, onIntent: (LogcatIntent) -> Unit, onStart: (
             textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 12f, false),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         )
+        if (!state.canReadAllLogs) ReadLogsBanner(grantCommand)
         Hairline()
         if (visible.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 EmptyState(
                     icon = CodeinIcons.Terminal,
                     title = if (state.running) "Waiting for log output" else "Logcat stopped",
-                    message = "Android only shows this app's own logs unless READ_LOGS is granted with: adb shell pm grant com.codein.ide android.permission.READ_LOGS",
+                    message = if (state.canReadAllLogs) "Logs from every app on the device appear here." else "Only Codein's own logs are visible until READ_LOGS is granted (see above).",
                 )
             }
         } else {
@@ -137,6 +149,54 @@ private fun PidChip(state: LogcatState, onIntent: (LogcatIntent) -> Unit) {
             state.knownPids.forEach { pid ->
                 DropdownMenuItem(text = { Text("PID $pid") }, onClick = { open = false; onIntent(LogcatIntent.LockPid(pid)) })
             }
+        }
+    }
+}
+
+/**
+ * Android grants READ_LOGS only to system apps or over adb, so Codein explains the one-time grant
+ * (from a computer, or from the phone itself with Wireless debugging + an adb client such as Termux).
+ */
+@Composable
+private fun ReadLogsBanner(command: String) {
+    val clipboard = LocalClipboardManager.current
+    var expanded by remember { mutableStateOf(false) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .background(CodeinTheme.colors.warning.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+            .padding(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Showing only Codein's logs. Grant READ_LOGS once to see your installed app's logs.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide" else "How") }
+        }
+        if (expanded) {
+            Text(
+                "1. Enable Developer options > USB debugging (or Wireless debugging).\n" +
+                    "2. From a computer, or from Termux on this phone after pairing with Wireless debugging, run:",
+                style = MaterialTheme.typography.bodySmall,
+                color = CodeinTheme.colors.textMuted,
+            )
+            Spacer(Modifier.width(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    command,
+                    style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 11.5f, false),
+                    modifier = Modifier.weight(1f).padding(vertical = 6.dp),
+                )
+                ToolbarIconButton(CodeinIcons.Copy, "Copy command", size = 32.dp) { clipboard.setText(AnnotatedString(command)) }
+            }
+            Text(
+                "3. Force-stop and reopen Codein. The grant survives app updates but not reinstalling.",
+                style = MaterialTheme.typography.bodySmall,
+                color = CodeinTheme.colors.textMuted,
+            )
         }
     }
 }
