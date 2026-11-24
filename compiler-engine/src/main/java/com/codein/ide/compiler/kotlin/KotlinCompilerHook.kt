@@ -76,7 +76,7 @@ class KotlinCompilerHook @Inject constructor(
         classLoader?.takeIf { loadedSignature == signature }?.let { return it }
 
         val dexRoot = File(toolchain.workRoot, "kotlinc-dex").apply { mkdirs() }
-        val dexDir = File(dexRoot, "v2-${signature.hashCode().toUInt()}")
+        val dexDir = File(dexRoot, "v3-${signature.hashCode().toUInt()}")
         val manifest = File(dexDir, "archives.txt")
         if (!manifest.isFile) {
             // Drop conversions of older compiler versions (and the old single-archive layout).

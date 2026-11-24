@@ -279,7 +279,7 @@ class D8Dexer @Inject constructor() {
      * memory. A single D8 run over kotlin-compiler-embeddable needs far more than the ~512 MB heap an
      * app gets, so classes are streamed in chunks of about [CHUNK_BYTES] of bytecode, each dexed on
      * its own into `chunk-N.zip`. Classes that share an outer class stay in the same chunk so nest
-     * members and their host are desugared together. Non-class resources go into `resources.jar`.
+     * members and their host are desugared together. The original entries, class files included, go into `resources.jar` for resource lookups.
      * Returns every archive to put on the class loader path, in order.
      */
     suspend fun dexJarsToArchives(
@@ -363,7 +363,11 @@ class D8Dexer @Inject constructor() {
         DexResult(diagnostics.none { it.severity == Severity.Error }, archives, diagnostics.toList())
     }
 
-    /** Copies non-class resources of [jars] (first occurrence wins) into [target]. */
+    /**
+     * Copies the entries of [jars] (first occurrence wins) into [target], class files included:
+     * kotlinc finds its own location and its `META-INF/extensions` descriptors by looking up its
+     * class files as resources, which ART's dex output does not provide.
+     */
     private fun writeResources(target: File, jars: List<File>) {
         val seen = HashSet<String>()
         java.util.zip.ZipOutputStream(target.outputStream().buffered()).use { out ->
@@ -371,7 +375,7 @@ class D8Dexer @Inject constructor() {
                 java.util.zip.ZipFile(jar).use { zip ->
                     for (entry in zip.entries()) {
                         val name = entry.name
-                        if (entry.isDirectory || name.endsWith(".class") || isSignatureFile(name) || !seen.add(name)) continue
+                        if (entry.isDirectory || isSignatureFile(name) || !seen.add(name)) continue
                         out.putNextEntry(java.util.zip.ZipEntry(name))
                         zip.getInputStream(entry).use { it.copyTo(out) }
                         out.closeEntry()
