@@ -53,7 +53,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Build test APKs
-        run: ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Run instrumented tests on an API 34 x86_64 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -67,7 +67,7 @@ jobs:
           script: |
             adb logcat -c
             adb logcat -s CodeinDeviceTest:V AndroidRuntime:E TestRunner:V > device-log.txt &
-            ./gradlew --no-daemon connectedDebugAndroidTest || (cat device-log.txt; exit 1)
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest || (cat device-log.txt; exit 1)
             cat device-log.txt
       - uses: actions/upload-artifact@v4
         if: always()

@@ -70,7 +70,7 @@ android {
                 "META-INF/*.DSA",
                 "META-INF/*.RSA",
                 "META-INF/*.kotlin_module",
-                "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                "META-INF/versions/*/OSGI-INF/MANIFEST.MF",
                 "META-INF/eclipse.inf",
                 "plugin.properties",
                 "plugin.xml",
