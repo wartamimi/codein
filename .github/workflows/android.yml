@@ -67,7 +67,7 @@ jobs:
           script: |
             adb logcat -c
             adb logcat -s CodeinDeviceTest:V AndroidRuntime:E TestRunner:V > device-log.txt &
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest || (cat device-log.txt; exit 1)
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest || (cat device-log.txt; adb logcat -d -b main,system,crash '*:W' | grep -aiE "codein|lowmemory|lmkd|killing|fatal|signal|abort|OutOfMemory|dex2oat" | tail -250; exit 1)
             cat device-log.txt
       - uses: actions/upload-artifact@v4
         if: always()
