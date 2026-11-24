@@ -22,7 +22,9 @@ data class VerificationReport(
 
 /** Signs APKs (v1/v2/v3) and App Bundles (JAR signature) with Google's `apksig` library. */
 @Singleton
-class ApkSignerService @Inject constructor(private val aligner: ZipAligner) {
+class ApkSignerService @Inject constructor() {
+
+    private val aligner = ZipAligner()
 
     /** zipaligns [unsignedApk] then signs it into [outputApk]. */
     suspend fun alignAndSign(
