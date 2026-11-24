@@ -76,8 +76,14 @@ class BuildToolchain @Inject constructor(
             if (target.exists()) target.delete()
             check(temp.renameTo(target)) { "Unable to move android.jar into place" }
             target
-        }.getOrNull()
+        }.onFailure { lastExtractionError = "${it.javaClass.simpleName}: ${it.message}"; android.util.Log.e("BuildToolchain", "android.jar extraction failed", it) }
+            .getOrNull()
     }
+
+    /** Why the bundled android.jar could not be extracted, if that happened (shown in build errors). */
+    @Volatile
+    var lastExtractionError: String? = null
+        private set
 
     /**
      * `core-lambda-stubs.jar` from the SDK build-tools: declares `java.lang.invoke.LambdaMetafactory`

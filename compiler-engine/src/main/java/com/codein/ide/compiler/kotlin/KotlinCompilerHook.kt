@@ -118,6 +118,9 @@ class KotlinCompilerHook @Inject constructor(
             add("-no-jdk")
             add("-no-reflect")
             add("-no-stdlib")
+            // Without an explicit home, kotlinc locates itself by reading its own .class file as a
+            // resource, which does not exist once the compiler has been converted to dex.
+            add("-kotlin-home"); add(toolchain.kotlinCompilerDir.absolutePath)
             add("-jvm-target"); add(request.jvmTarget)
             add("-module-name"); add(request.moduleName)
             add("-d"); add(request.outputDir.absolutePath)

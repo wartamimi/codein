@@ -179,8 +179,10 @@ class BuildOrchestrator @Inject constructor(
             ?: fail(
                 BuildStep.MavenResolve,
                 DiagnosticSource.Gradle,
-                "android.jar for API ${config.compileSdk} is not installed. Import it in Settings > Toolchain " +
-                    "(copy platforms/android-${config.compileSdk}/android.jar from an Android SDK).",
+                "The android.jar bundled with Codein could not be prepared" +
+                    (toolchain.lastExtractionError?.let { " ($it)" } ?: "") +
+                    ". Check that the device has free storage, or import platforms/android-${config.compileSdk}/android.jar " +
+                    "from an Android SDK in Settings > Toolchain.",
             )
         return BuildContext(request, moduleDir, File(moduleDir, "build"), config, androidJar)
     }
