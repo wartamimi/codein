@@ -53,11 +53,12 @@ class ManifestMerger @Inject constructor() {
 
         for (libManifest in libraryManifests) {
             if (!libManifest.isFile) continue
-            val libDoc = runCatching { builder.parse(applyPlaceholders(libManifest.readText(), allPlaceholders).byteInputStream()) }
-                .getOrElse { e ->
-                    warnings += "Skipping unreadable manifest ${libManifest.path}: ${e.message}"
-                    continue
-                }
+            val parsed = runCatching { builder.parse(applyPlaceholders(libManifest.readText(), allPlaceholders).byteInputStream()) }
+            val libDoc = parsed.getOrNull()
+            if (libDoc == null) {
+                warnings += "Skipping unreadable manifest ${libManifest.path}: ${parsed.exceptionOrNull()?.message}"
+                continue
+            }
             val libRoot = libDoc.documentElement
             for (child in elementChildren(libRoot)) {
                 when (child.tagName) {
