@@ -57,7 +57,7 @@ import com.codein.ide.core.ui.components.CountBadge
 import com.codein.ide.core.ui.icons.CodeinIcons
 import com.codein.ide.core.ui.icons.FileTypeBadge
 
-enum class PaletteCategory(val label: String) { File("File"), Action("Action"), Gradle("Gradle"), Appearance("Appearance"), Build("Build") }
+enum class PaletteCategory(val label: String) { File("File"), Symbol("Symbol"), Action("Action"), Gradle("Gradle"), Appearance("Appearance"), Build("Build") }
 
 /** An entry in the Quick Open / Command Palette. */
 data class PaletteItem(
@@ -119,10 +119,18 @@ fun CommandPalette(
         val (prefixCategory, text) = when {
             query.startsWith(">") -> PaletteCategory.Action to query.drop(1).trim()
             query.startsWith("@") -> PaletteCategory.Gradle to query.drop(1).trim()
+            query.startsWith("#") -> PaletteCategory.Symbol to query.drop(1).trim()
             else -> null to query.trim()
         }
         items.asSequence()
-            .filter { prefixCategory == null || it.category == prefixCategory || (prefixCategory == PaletteCategory.Action && it.category != PaletteCategory.File) }
+            .filter { item ->
+                when (prefixCategory) {
+                    // Symbols only appear when asked for with '#', so they never crowd file results.
+                    null -> item.category != PaletteCategory.Symbol
+                    PaletteCategory.Action -> item.category != PaletteCategory.File && item.category != PaletteCategory.Symbol
+                    else -> item.category == prefixCategory
+                }
+            }
             .mapNotNull { item ->
                 val m = FuzzyMatcher.match(text, item.title) ?: FuzzyMatcher.match(text, item.subtitle)?.let { it.copy(score = it.score - 25, positions = emptyList()) }
                 m?.let { item to it }
@@ -150,7 +158,7 @@ fun CommandPalette(
                     Spacer(Modifier.width(10.dp))
                     Box(Modifier.weight(1f)) {
                         if (query.isEmpty()) {
-                            Text("Search files, > actions, @ Gradle tasks", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Search files, # symbols, > actions, @ Gradle", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         BasicTextField(
                             value = query,

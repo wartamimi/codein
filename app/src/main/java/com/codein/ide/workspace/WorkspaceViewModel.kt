@@ -73,9 +73,10 @@ sealed interface WorkspaceIntent {
     data object CancelBuild : WorkspaceIntent
     data class SetVariant(val variant: BuildVariant) : WorkspaceIntent
     data class JumpToDiagnostic(val diagnostic: CompilerDiagnostic) : WorkspaceIntent
+    data class GoToLine(val line: Int, val column: Int = 1) : WorkspaceIntent
     data class ShowDock(val tab: DockTab) : WorkspaceIntent
     data object HideDock : WorkspaceIntent
-    data class SetPalette(val open: Boolean) : WorkspaceIntent
+    data class SetPalette(val open: Boolean, val query: String = "") : WorkspaceIntent
     data class SetPreferences(val open: Boolean) : WorkspaceIntent
     data class Preference(val change: PreferenceChange) : WorkspaceIntent
     data class Key(val key: ExtraKey) : WorkspaceIntent
@@ -224,9 +225,10 @@ class WorkspaceViewModel @Inject constructor(
             WorkspaceIntent.CancelBuild -> buildJob?.cancel()
             is WorkspaceIntent.SetVariant -> _state.update { it.copy(build = it.build.copy(variant = intent.variant)) }
             is WorkspaceIntent.JumpToDiagnostic -> jumpTo(intent.diagnostic)
+            is WorkspaceIntent.GoToLine -> _commands.tryEmit(EditorCommand.GoTo(intent.line, intent.column))
             is WorkspaceIntent.ShowDock -> _state.update { it.copy(dockVisible = true, dockTab = intent.tab) }
             WorkspaceIntent.HideDock -> _state.update { it.copy(dockVisible = false) }
-            is WorkspaceIntent.SetPalette -> _state.update { it.copy(paletteOpen = intent.open) }
+            is WorkspaceIntent.SetPalette -> _state.update { it.copy(paletteOpen = intent.open, paletteQuery = intent.query) }
             is WorkspaceIntent.SetPreferences -> _state.update { it.copy(preferencesOpen = intent.open) }
             is WorkspaceIntent.Preference -> viewModelScope.launch { applyPreference(intent.change) }
             is WorkspaceIntent.Key -> onExtraKey(intent.key)

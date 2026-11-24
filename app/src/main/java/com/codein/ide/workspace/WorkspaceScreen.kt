@@ -38,6 +38,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +80,8 @@ import com.codein.ide.editor.keys.ExtraKeysBar
 import com.codein.ide.editor.palette.CommandPalette
 import com.codein.ide.editor.palette.PaletteCategory
 import com.codein.ide.editor.palette.PaletteItem
+import com.codein.ide.editor.outline.SymbolKind
+import com.codein.ide.editor.outline.SymbolOutline
 import com.codein.ide.editor.search.FindReplaceBar
 import com.codein.ide.editor.search.GlobalSearchPanel
 import com.codein.ide.editor.settings.EditorPreferencesSheet
@@ -182,6 +185,7 @@ fun WorkspaceScreen(
                 when (e.key) {
                     Key.S -> { onIntent(if (e.isShiftPressed) WorkspaceIntent.SaveAll else WorkspaceIntent.Save); true }
                     Key.P -> { onIntent(WorkspaceIntent.SetPalette(true)); true }
+                    Key.O -> { onIntent(WorkspaceIntent.SetPalette(true, "#")); true }
                     Key.F -> { onIntent(if (e.isShiftPressed) WorkspaceIntent.ShowDock(DockTab.Search) else WorkspaceIntent.OpenFind); true }
                     Key.B -> { onIntent(WorkspaceIntent.Build); true }
                     Key.Slash -> { controller.toggleComment(); true }
@@ -321,7 +325,9 @@ fun WorkspaceScreen(
 
     if (state.paletteOpen) {
         val items = rememberPaletteItems(state, onIntent, onOpenSettings, toggleAi = { aiDockVisible = !aiDockVisible })
-        CommandPalette(items = items, onDismiss = { onIntent(WorkspaceIntent.SetPalette(false)) })
+        key(state.paletteQuery) {
+            CommandPalette(items = items, onDismiss = { onIntent(WorkspaceIntent.SetPalette(false)) }, initialQuery = state.paletteQuery)
+        }
     }
     if (state.preferencesOpen) {
         EditorPreferencesSheet(prefs, onChange = { onIntent(WorkspaceIntent.Preference(it)) }, onDismiss = { onIntent(WorkspaceIntent.SetPreferences(false)) })
@@ -480,13 +486,29 @@ private fun rememberPaletteItems(
                 .toList()
         }
     }
-    return remember(files, state.build.variant) {
+    val active = state.activeFile
+    val symbols = remember(active?.relativePath, active?.content) {
+        active?.let { SymbolOutline.outline(it.relativePath, it.content) }.orEmpty()
+    }
+    return remember(files, state.build.variant, symbols) {
         buildList {
+            symbols.forEachIndexed { i, sym ->
+                add(
+                    PaletteItem(
+                        "s:$i:${sym.line}:${sym.name}",
+                        "  ".repeat(sym.depth.coerceAtMost(6)) + sym.name,
+                        "${sym.kind.label} · line ${sym.line}" + if (sym.detail.isNotEmpty() && sym.kind == SymbolKind.Element) " · ${sym.detail}" else "",
+                        PaletteCategory.Symbol,
+                        CodeinIcons.Code,
+                    ) { onIntent(WorkspaceIntent.GoToLine(sym.line)) },
+                )
+            }
             files.forEach { rel ->
                 add(PaletteItem("f:$rel", rel.substringAfterLast('/'), rel.substringBeforeLast('/', ""), PaletteCategory.File, fileName = rel.substringAfterLast('/')) { onIntent(WorkspaceIntent.OpenFile(rel)) })
             }
             add(PaletteItem("a:build", "Build & Run", state.build.variant.displayName, PaletteCategory.Action, CodeinIcons.Play, shortcut = "Ctrl+B") { onIntent(WorkspaceIntent.Build) })
             add(PaletteItem("a:save", "Save all", "", PaletteCategory.Action, CodeinIcons.Save, shortcut = "Ctrl+Shift+S") { onIntent(WorkspaceIntent.SaveAll) })
+            add(PaletteItem("a:symbols", "Go to symbol in file", "Type # in the palette", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+O") { onIntent(WorkspaceIntent.SetPalette(true, "#")) })
             add(PaletteItem("a:find", "Find in file", "", PaletteCategory.Action, CodeinIcons.Search, shortcut = "Ctrl+F") { onIntent(WorkspaceIntent.OpenFind) })
             add(PaletteItem("a:search", "Search in project", "", PaletteCategory.Action, CodeinIcons.Search, shortcut = "Ctrl+Shift+F") { onIntent(WorkspaceIntent.ShowDock(DockTab.Search)) })
             add(PaletteItem("a:ai", "Toggle Codein AI", "", PaletteCategory.Action, CodeinIcons.Sparkle) { toggleAi(); onIntent(WorkspaceIntent.ShowDock(DockTab.Ai)) })

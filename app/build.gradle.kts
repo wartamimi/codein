@@ -1,3 +1,7 @@
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -140,16 +144,16 @@ val fetchAapt2 = tasks.register("fetchAapt2") {
             if (manual.isFile) continue
             val zipFile = File(temporaryDir, "android-sdk-tools-static-$arch.zip")
             try {
-                var url = java.net.URL("$base/android-sdk-tools-static-$arch.zip")
+                var url = URL("$base/android-sdk-tools-static-$arch.zip")
                 var redirects = 0
                 while (true) {
-                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    val conn = url.openConnection() as HttpURLConnection
                     conn.instanceFollowRedirects = false
                     conn.connectTimeout = 30_000
                     conn.readTimeout = 180_000
                     val code = conn.responseCode
                     if (code in 300..399) {
-                        url = java.net.URL(url, conn.getHeaderField("Location"))
+                        url = URL(url, conn.getHeaderField("Location"))
                         conn.disconnect()
                         if (++redirects > 10) throw GradleException("Too many redirects for aapt2 download")
                         continue
@@ -158,7 +162,7 @@ val fetchAapt2 = tasks.register("fetchAapt2") {
                     conn.inputStream.use { input -> zipFile.outputStream().use { input.copyTo(it) } }
                     break
                 }
-                java.util.zip.ZipFile(zipFile).use { zip ->
+                ZipFile(zipFile).use { zip ->
                     val entry = zip.entries().asSequence().firstOrNull { !it.isDirectory && it.name.substringAfterLast('/') == "aapt2" }
                         ?: throw GradleException("aapt2 not found inside ${zipFile.name}")
                     target.parentFile.mkdirs()

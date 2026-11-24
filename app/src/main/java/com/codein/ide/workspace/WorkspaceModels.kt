@@ -70,6 +70,7 @@ data class WorkspaceState(
     val dockTab: DockTab = DockTab.Build,
     val dockVisible: Boolean = false,
     val paletteOpen: Boolean = false,
+    val paletteQuery: String = "",
     val preferencesOpen: Boolean = false,
     val toolchain: ToolchainStatus? = null,
     val gradleFiles: List<String> = emptyList(),
