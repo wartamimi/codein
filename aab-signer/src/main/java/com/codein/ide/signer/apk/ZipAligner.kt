@@ -12,7 +12,7 @@ import javax.inject.Singleton
 
 /**
  * Pure-Kotlin `zipalign`. Rewrites an archive so that every uncompressed (STORED) entry's data
- * starts at an offset aligned to 4 bytes, and uncompressed native libraries (`lib/**.so`) are aligned
+ * starts at an offset aligned to 4 bytes, and uncompressed native libraries (`.so` files under `lib/`) are aligned
  * to 16 KiB pages (required for 16 KB page-size devices on Android 15+). Alignment is achieved by
  * padding the local file header's extra field, exactly like the SDK tool.
  */

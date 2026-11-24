@@ -20,6 +20,7 @@ ecj = "3.33.0"
 r8 = "8.5.35"
 apksig = "8.9.1"
 bundletool = "1.17.2"
+guava = "33.3.1-jre"
 bouncycastle = "1.80"
 jgit = "6.10.0.202406032230-r"
 desugarJdkLibs = "2.1.5"
@@ -65,6 +66,7 @@ sora-language-textmate = { group = "io.github.Rosemoe.sora-editor", name = "lang
 ecj = { group = "org.eclipse.jdt", name = "ecj", version.ref = "ecj" }
 r8 = { group = "com.android.tools", name = "r8", version.ref = "r8" }
 apksig = { group = "com.android.tools.build", name = "apksig", version.ref = "apksig" }
+guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 bundletool = { group = "com.android.tools.build", name = "bundletool", version.ref = "bundletool" }
 bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
