@@ -50,6 +50,7 @@ import javax.inject.Inject
 
 sealed interface WorkspaceIntent {
     data class ToggleDirectory(val relativePath: String) : WorkspaceIntent
+    data object CollapseAll : WorkspaceIntent
     data class OpenFile(val relativePath: String, val line: Int? = null, val column: Int? = null) : WorkspaceIntent
     data class SelectTab(val index: Int) : WorkspaceIntent
     data class CloseTab(val index: Int) : WorkspaceIntent
@@ -142,6 +143,10 @@ class WorkspaceViewModel @Inject constructor(
                     val expanded = if (intent.relativePath in s.expanded) s.expanded - intent.relativePath else s.expanded + intent.relativePath
                     s.copy(expanded = expanded)
                 }
+                refreshTree()
+            }
+            WorkspaceIntent.CollapseAll -> {
+                _state.update { it.copy(expanded = setOf("")) }
                 refreshTree()
             }
             is WorkspaceIntent.OpenFile -> openFile(intent.relativePath, intent.line, intent.column)

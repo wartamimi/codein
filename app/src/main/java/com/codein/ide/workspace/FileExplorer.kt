@@ -1,6 +1,17 @@
 package com.codein.ide.workspace
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.font.FontWeight
+import com.codein.ide.core.ui.components.EmptyState
+import com.codein.ide.core.ui.components.HairlineDivider
+import com.codein.ide.core.ui.theme.Sizes
+import com.codein.ide.core.ui.theme.Spacing
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +62,10 @@ private sealed interface ExplorerDialog {
     data class Delete(val row: TreeRow) : ExplorerDialog
 }
 
-/** Project file tree with Git status badges and a long-press context menu. */
+/**
+ * Project file tree: 32dp rows, 16dp indentation with hairline guides per depth, 16dp color-coded
+ * file icons, right-aligned Git badges, a quick-action bar and a long-press context menu.
+ */
 @Composable
 fun FileExplorer(
     projectName: String,
@@ -77,22 +91,32 @@ fun FileExplorer(
         }
         map
     }
-    Column(modifier.fillMaxSize().background(CodeinTheme.colors.panel)) {
+    val guideColor = MaterialTheme.colorScheme.outlineVariant
+    val activeAccent = MaterialTheme.colorScheme.primary
+    val activeBg = CodeinTheme.colors.tier3
+    Column(modifier.fillMaxSize()) {
         PanelHeader(projectName.ifEmpty { "Explorer" }, icon = CodeinIcons.FolderOpen) {
-            ToolbarIconButton(CodeinIcons.FilePlus, "New file", size = 32.dp) { dialog = ExplorerDialog.NewFile("") }
-            ToolbarIconButton(CodeinIcons.FolderPlus, "New folder", size = 32.dp) { dialog = ExplorerDialog.NewFolder("") }
-            ToolbarIconButton(CodeinIcons.Refresh, "Refresh", size = 32.dp) { onIntent(WorkspaceIntent.RefreshTree) }
+            ToolbarIconButton(CodeinIcons.FilePlus, "New file", size = 28.dp) { dialog = ExplorerDialog.NewFile("") }
+            ToolbarIconButton(CodeinIcons.FolderPlus, "New folder", size = 28.dp) { dialog = ExplorerDialog.NewFolder("") }
+            ToolbarIconButton(CodeinIcons.CollapseAll, "Collapse all", size = 28.dp) { onIntent(WorkspaceIntent.CollapseAll) }
+            ToolbarIconButton(CodeinIcons.Refresh, "Refresh", size = 28.dp) { onIntent(WorkspaceIntent.RefreshTree) }
         }
-        Hairline()
-        LazyColumn(Modifier.fillMaxSize()) {
+        HairlineDivider()
+        if (rows.isEmpty()) {
+            EmptyState(CodeinIcons.Folder, "Empty project", "Create a file or folder with the buttons above.", Modifier.fillMaxWidth())
+        }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = Spacing.xs)) {
             items(rows, key = { it.relativePath }) { row ->
                 val status = if (row.isDirectory) folderStatus[row.relativePath] else gitStatus[row.relativePath]
-                Box {
+                val active = row.relativePath == activePath
+                Box(Modifier.animateItem()) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .height(30.dp)
-                            .background(if (row.relativePath == activePath) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
+                            .height(Sizes.TreeRow)
+                            .padding(horizontal = Spacing.xs)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (active) activeBg else Color.Transparent)
                             .combinedClickable(
                                 onClick = {
                                     if (row.isDirectory) onIntent(WorkspaceIntent.ToggleDirectory(row.relativePath))
@@ -100,35 +124,54 @@ fun FileExplorer(
                                 },
                                 onLongClick = { menuFor = row.relativePath },
                             )
-                            .padding(start = (8 + row.depth * 14).dp, end = 8.dp),
+                            .drawBehind {
+                                // One hairline guide per ancestor directory, centred under its chevron.
+                                val indent = Sizes.TreeIndent.toPx()
+                                val start = Spacing.sm.toPx() + indent / 2
+                                for (d in 0 until row.depth) {
+                                    val x = start + d * indent
+                                    drawLine(guideColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
+                                }
+                                if (active) {
+                                    drawRect(activeAccent, topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
+                                }
+                            }
+                            .padding(start = Spacing.sm + Sizes.TreeIndent * row.depth, end = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (row.isDirectory) {
-                            FolderChevron(row.expanded, Modifier.size(14.dp))
-                            Spacer(Modifier.width(2.dp))
-                            FolderIcon(row.expanded)
+                            FolderChevron(row.expanded, Modifier.size(Sizes.IconSm))
+                            Spacer(Modifier.width(Spacing.xs))
+                            FolderIcon(row.expanded, Modifier.size(Sizes.IconSm))
                         } else {
-                            Spacer(Modifier.width(16.dp))
-                            FileTypeBadge(row.file.name, size = 16.dp)
+                            Spacer(Modifier.width(Sizes.IconSm + Spacing.xs))
+                            FileTypeBadge(row.file.name, size = Sizes.IconSm)
                         }
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(
                             row.file.name,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = status?.color ?: MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                            color = status?.color ?: if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
-                        if (status != null && !row.isDirectory) GitStatusBadge(status)
-                        else if (status != null) Box(Modifier.size(6.dp).background(status.color, androidx.compose.foundation.shape.CircleShape))
+                        if (status != null && !row.isDirectory) {
+                            Box(
+                                Modifier.size(Sizes.IconSm).clip(RoundedCornerShape(4.dp)).background(status.color.copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center,
+                            ) { GitStatusBadge(status) }
+                        } else if (status != null) {
+                            Box(Modifier.size(6.dp).clip(CircleShape).background(status.color))
+                        }
                     }
-                    DropdownMenu(expanded = menuFor == row.relativePath, onDismissRequest = { menuFor = null }) {
+                    DropdownMenu(expanded = menuFor == row.relativePath, onDismissRequest = { menuFor = null }, containerColor = CodeinTheme.colors.tier2) {
                         val parent = if (row.isDirectory) row.relativePath else row.relativePath.substringBeforeLast('/', "")
-                        DropdownMenuItem(text = { Text("New file") }, leadingIcon = { Icon(CodeinIcons.FilePlus, null) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFile(parent) })
-                        DropdownMenuItem(text = { Text("New folder") }, leadingIcon = { Icon(CodeinIcons.FolderPlus, null) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFolder(parent) })
-                        DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(CodeinIcons.Type, null) }, onClick = { menuFor = null; dialog = ExplorerDialog.Rename(row) })
-                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(CodeinIcons.Trash, null, tint = MaterialTheme.colorScheme.error) }, onClick = { menuFor = null; dialog = ExplorerDialog.Delete(row) })
+                        DropdownMenuItem(text = { Text("New file") }, leadingIcon = { Icon(CodeinIcons.FilePlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFile(parent) })
+                        DropdownMenuItem(text = { Text("New folder") }, leadingIcon = { Icon(CodeinIcons.FolderPlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFolder(parent) })
+                        DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(CodeinIcons.Type, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Rename(row) })
+                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(CodeinIcons.Trash, null, Modifier.size(Sizes.Icon), tint = MaterialTheme.colorScheme.error) }, onClick = { menuFor = null; dialog = ExplorerDialog.Delete(row) })
                     }
                 }
             }

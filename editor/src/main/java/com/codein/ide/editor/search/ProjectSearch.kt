@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.border
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +39,8 @@ import com.codein.ide.core.ui.components.CountBadge
 import com.codein.ide.core.ui.components.PanelHeader
 import com.codein.ide.core.ui.components.ToolbarIconButton
 import com.codein.ide.core.ui.icons.CodeinIcons
+import com.codein.ide.core.ui.components.CompactTextField
+import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.core.ui.icons.FileTypeBadge
 import com.codein.ide.core.ui.icons.FolderChevron
 import com.codein.ide.core.ui.theme.CodeinTheme
@@ -155,24 +159,29 @@ fun GlobalSearchPanel(
             ToolbarIconButton(CodeinIcons.WholeWord, "Whole word", active = state.options.wholeWord, size = 30.dp) { onOptionsChange(state.options.copy(wholeWord = !state.options.wholeWord)) }
             ToolbarIconButton(CodeinIcons.Regex, "Regex", active = state.options.regex, size = 30.dp) { onOptionsChange(state.options.copy(regex = !state.options.regex)) }
         }
-        OutlinedTextField(
+        val invalid = validation as? QueryValidation.Invalid
+        CompactTextField(
             value = state.query,
             onValueChange = onQueryChange,
-            singleLine = true,
-            isError = validation is QueryValidation.Invalid,
-            placeholder = { Text(if (state.options.regex) "Regex, e.g. fun (\\w+)\\(" else "Search text") },
-            supportingText = (validation as? QueryValidation.Invalid)?.let { { Text(it.message) } },
+            placeholder = if (state.options.regex) "Regex, e.g. fun (\\w+)\\(" else "Search text",
+            leadingIcon = CodeinIcons.Search,
+            isError = invalid != null,
             textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 13f, false),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
         )
-        OutlinedTextField(
+        if (invalid != null) {
+            Text(invalid.message, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs))
+        }
+        Spacer(Modifier.height(Spacing.sm))
+        CompactTextField(
             value = state.includeGlobs,
             onValueChange = onGlobsChange,
-            singleLine = true,
-            label = { Text("Files to include") },
+            placeholder = "Files to include, e.g. *.kt",
+            leadingIcon = CodeinIcons.Filter,
             textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 12f, false),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
         )
+        Spacer(Modifier.height(Spacing.sm))
         if (state.searching) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
         state.result?.let { r ->
             Text(
@@ -197,8 +206,10 @@ private fun FileHitsCard(fileHits: FileHits, onOpenHit: (File, LineHit) -> Unit)
         Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            .clip(RoundedCornerShape(12.dp))
+            .background(CodeinTheme.colors.tier2)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+            .animateContentSize(com.codein.ide.core.ui.theme.Motion.spatial()),
     ) {
         Row(
             Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 8.dp, vertical = 6.dp),

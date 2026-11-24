@@ -64,6 +64,7 @@ fun CodeinNavHost(navController: NavHostController = rememberNavController()) {
             WorkspaceScreen(
                 projectPath = path,
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } },
+                onNewProject = { navController.navigate(Routes.WIZARD) { launchSingleTop = true } },
                 onCloseProject = {
                     if (!navController.popBackStack(Routes.HOME, inclusive = false)) {
                         navController.navigate(Routes.HOME) { popUpTo(0) }

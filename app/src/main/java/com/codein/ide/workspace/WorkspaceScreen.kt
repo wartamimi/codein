@@ -1,11 +1,23 @@
 package com.codein.ide.workspace
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,25 +33,29 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,7 +63,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -57,36 +74,50 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codein.ide.ai.ui.AiAssistantPanel
 import com.codein.ide.ai.ui.AiAssistantViewModel
 import com.codein.ide.compiler.gradle.GradleDependency
 import com.codein.ide.compiler.gradle.GradleScriptParser
+import com.codein.ide.compiler.model.BuildResult
 import com.codein.ide.compiler.model.BuildVariant
+import com.codein.ide.compiler.model.Severity
+import com.codein.ide.core.ui.components.DragHandle
 import com.codein.ide.core.ui.components.EmptyState
-import com.codein.ide.core.ui.components.Hairline
-import com.codein.ide.core.ui.components.PillChip
+import com.codein.ide.core.ui.components.HairlineDivider
+import com.codein.ide.core.ui.components.PulseDot
+import com.codein.ide.core.ui.components.SegmentedTabs
 import com.codein.ide.core.ui.components.ToolbarIconButton
-import com.codein.ide.core.ui.components.VerticalHairline
+import com.codein.ide.core.ui.components.formatDuration
 import com.codein.ide.core.ui.icons.CodeinIcons
+import com.codein.ide.core.ui.prefs.EditorPreferences
 import com.codein.ide.core.ui.theme.CodeinTheme
 import com.codein.ide.core.ui.theme.CodingFont
 import com.codein.ide.core.ui.theme.EditorColorSchemes
+import com.codein.ide.core.ui.theme.Motion
+import com.codein.ide.core.ui.theme.Sizes
+import com.codein.ide.core.ui.theme.Spacing
+import com.codein.ide.core.ui.theme.metricsTextStyle
 import com.codein.ide.editor.keys.ExtraKey
 import com.codein.ide.editor.keys.ExtraKeysBar
+import com.codein.ide.editor.outline.SymbolKind
+import com.codein.ide.editor.outline.SymbolOutline
 import com.codein.ide.editor.palette.CommandPalette
 import com.codein.ide.editor.palette.PaletteCategory
 import com.codein.ide.editor.palette.PaletteItem
-import com.codein.ide.editor.outline.SymbolKind
-import com.codein.ide.editor.outline.SymbolOutline
 import com.codein.ide.editor.search.FindReplaceBar
 import com.codein.ide.editor.search.GlobalSearchPanel
 import com.codein.ide.editor.settings.EditorPreferencesSheet
 import com.codein.ide.editor.settings.PreferenceChange
 import com.codein.ide.editor.sora.CodeEditorController
+import com.codein.ide.editor.sora.EditorDiagnostic
 import com.codein.ide.editor.sora.EditorDocument
 import com.codein.ide.editor.sora.SoraCodeEditor
 import com.codein.ide.editor.sora.rememberCodeEditorController
@@ -97,30 +128,50 @@ import com.codein.ide.maven.model.MavenCoordinate
 import com.codein.ide.maven.ui.DependencyExplorerIntent
 import com.codein.ide.maven.ui.DependencyExplorerScreen
 import com.codein.ide.maven.ui.DependencyExplorerViewModel
+import com.codein.ide.signer.ui.KeystoreVaultViewModel
 import com.codein.ide.vcs.ui.GitPanel
 import com.codein.ide.vcs.ui.GitViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.abs
 
-private val ExpandedWidth = 840.dp
+/** The four tools that live in the explorer sidebar / drawer. */
+private enum class SidebarTab(val title: String) { Files("Files"), Search("Search"), Git("Git"), Maven("Maven") }
+
+/** Snap points of the bottom developer dock. */
+private enum class DockDetent { Collapsed, Half, Expanded }
+
+private val SidebarDockTabs = setOf(DockTab.Search, DockTab.Git, DockTab.Dependencies)
+
+private fun DockTab.toSidebar(): SidebarTab = when (this) {
+    DockTab.Git -> SidebarTab.Git
+    DockTab.Dependencies -> SidebarTab.Maven
+    else -> SidebarTab.Search
+}
 
 /**
- * The adaptive IDE workspace. Phones get a modal file drawer, a full-height editor and a
- * resizable bottom dock (Build, Logcat, AI, Search, Git, Dependencies). Tablets and foldables get
- * a persistent sidebar, the editor, a bottom console and a right-hand AI dock.
+ * The adaptive IDE workspace.
+ *
+ * - Compact (phones): a 300dp drawer with Files / Search / Git / Maven, a full-bleed editor, and a
+ *   multi-detent developer dock (38dp status ticker → 42% → 88%) with Build, Logcat and Codein AI.
+ * - Medium / Expanded (tablets, foldables): a 3-pane split, Explorer (260dp) | Editor | Codein AI
+ *   (340dp), with draggable 1dp dividers, plus the same dock (Build, Logcat) under the editor.
  */
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun WorkspaceScreen(
     projectPath: String,
     onOpenSettings: () -> Unit,
     onCloseProject: () -> Unit,
+    onNewProject: () -> Unit,
     viewModel: WorkspaceViewModel = hiltViewModel(),
     aiViewModel: AiAssistantViewModel = hiltViewModel(),
     gitViewModel: GitViewModel = hiltViewModel(),
     logcatViewModel: LogcatViewModel = hiltViewModel(),
     dependencyViewModel: DependencyExplorerViewModel = hiltViewModel(),
+    vaultViewModel: KeystoreVaultViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(projectPath) {
         viewModel.openProject(projectPath)
@@ -130,11 +181,15 @@ fun WorkspaceScreen(
     val prefs by viewModel.preferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val controller = rememberCodeEditorController()
     var canUndo by remember { mutableStateOf(false) }
     var canRedo by remember { mutableStateOf(false) }
-    var aiDockVisible by rememberSaveable { mutableStateOf(false) }
+    var aiPaneVisible by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var sidebarTab by rememberSaveable { mutableStateOf(SidebarTab.Files) }
+    var sidebarRequest by remember { mutableIntStateOf(0) }
+    var signingOpen by rememberSaveable { mutableStateOf(false) }
+    var lastConsoleTab by rememberSaveable { mutableStateOf(DockTab.Build) }
+    var consoleOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(controller) { viewModel.commands.collect { command -> controller.execute(command) } }
     LaunchedEffect(Unit) { viewModel.aiContext.collect { aiViewModel.updateContext(it) } }
@@ -146,12 +201,13 @@ fun WorkspaceScreen(
                     snackbar.showSnackbar("Allow Codein to install apps, then tap Install again")
                 }
                 is WorkspaceEffect.ShareFile -> OutputActions.share(context, effect.file, effect.mimeType)
-                WorkspaceEffect.OpenAiDock -> aiDockVisible = true
+                WorkspaceEffect.OpenAiDock -> aiPaneVisible = true
             }
         }
     }
     LaunchedEffect(Unit) { gitViewModel.messages.collect { snackbar.showSnackbar(it); viewModel.onIntent(WorkspaceIntent.RefreshTree) } }
     LaunchedEffect(Unit) { dependencyViewModel.messages.collect { snackbar.showSnackbar(it); viewModel.onIntent(WorkspaceIntent.RefreshTree) } }
+    LaunchedEffect(Unit) { vaultViewModel.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(state.projectDir, state.gradleFiles) {
         val dir = state.projectDir ?: return@LaunchedEffect
         val (buildFile, declared) = withContext(Dispatchers.IO) {
@@ -171,7 +227,6 @@ fun WorkspaceScreen(
         if (intent is WorkspaceIntent.Key && intent.key == ExtraKey.AiFix && state.errorCount > 0) aiViewModel.explainAndFix()
     }
     val aiFix: () -> Unit = {
-        aiDockVisible = true
         viewModel.onIntent(WorkspaceIntent.ShowDock(DockTab.Ai))
         aiViewModel.explainAndFix()
     }
@@ -179,7 +234,7 @@ fun WorkspaceScreen(
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(CodeinTheme.colors.base)
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || !e.isCtrlPressed) return@onPreviewKeyEvent false
                 when (e.key) {
@@ -193,8 +248,31 @@ fun WorkspaceScreen(
                 }
             },
     ) {
-        val expanded = maxWidth >= ExpandedWidth
-        val maxDock = maxHeight * 0.75f
+        val sizeClass = WindowSizeClass.calculateFromSize(DpSize(maxWidth, maxHeight))
+        val split = sizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+        val aiVisible = split && (aiPaneVisible ?: (sizeClass.widthSizeClass == WindowWidthSizeClass.Expanded))
+        val consoleTabs = if (split) listOf(DockTab.Build, DockTab.Logcat) else listOf(DockTab.Build, DockTab.Logcat, DockTab.Ai)
+
+        // The view model still speaks in dock tabs. Search / Git / Maven live in the sidebar, and on
+        // split layouts Codein AI lives in the right pane, so route those requests there while
+        // keeping whichever console tab was open.
+        LaunchedEffect(state.dockVisible, state.dockTab, split) {
+            val tab = state.dockTab
+            if (!state.dockVisible) { consoleOpen = false; return@LaunchedEffect }
+            when {
+                tab in SidebarDockTabs -> {
+                    sidebarTab = tab.toSidebar()
+                    sidebarRequest++
+                    viewModel.onIntent(if (consoleOpen) WorkspaceIntent.ShowDock(lastConsoleTab) else WorkspaceIntent.HideDock)
+                }
+                split && tab == DockTab.Ai -> {
+                    aiPaneVisible = true
+                    viewModel.onIntent(if (consoleOpen) WorkspaceIntent.ShowDock(lastConsoleTab) else WorkspaceIntent.HideDock)
+                }
+                else -> { lastConsoleTab = tab; consoleOpen = true }
+            }
+        }
+
         val editorArea: @Composable (Modifier) -> Unit = { modifier ->
             EditorArea(
                 state = state,
@@ -214,82 +292,125 @@ fun WorkspaceScreen(
                     val logcat by logcatViewModel.state.collectAsStateWithLifecycle()
                     LogcatPanel(logcat, logcatViewModel::onIntent, logcatViewModel::start, logcatViewModel::stop, modifier, grantCommand = logcatViewModel.grantCommand)
                 }
-                DockTab.Ai -> {
+                else -> {
                     val ai by aiViewModel.state.collectAsStateWithLifecycle()
                     AiAssistantPanel(ai, aiViewModel::onIntent, { onIntent(WorkspaceIntent.ApplyPatch(it)) }, { onIntent(WorkspaceIntent.InsertCode(it)) }, onOpenSettings, modifier)
                 }
-                DockTab.Search -> GlobalSearchPanel(
-                    state = state.search,
-                    onQueryChange = { onIntent(WorkspaceIntent.SearchQuery(it)) },
-                    onGlobsChange = { onIntent(WorkspaceIntent.SearchGlobs(it)) },
-                    onOptionsChange = { onIntent(WorkspaceIntent.SearchOptions(it)) },
-                    onOpenHit = { f, hit -> onIntent(WorkspaceIntent.OpenSearchHit(f, hit)) },
-                    modifier = modifier,
-                )
-                DockTab.Git -> {
-                    val git by gitViewModel.state.collectAsStateWithLifecycle()
-                    GitPanel(git, gitViewModel::onIntent, { onIntent(WorkspaceIntent.OpenFile(it)) }, modifier)
-                }
-                DockTab.Dependencies -> {
-                    val deps by dependencyViewModel.state.collectAsStateWithLifecycle()
-                    DependencyExplorerScreen(deps, dependencyViewModel::onIntent, modifier)
+            }
+        }
+        val sidebar: @Composable (Modifier, () -> Unit) -> Unit = { modifier, onFileOpened ->
+            WorkspaceSidebar(
+                tab = sidebarTab,
+                onTab = { sidebarTab = it },
+                modifier = modifier,
+            ) { tab ->
+                when (tab) {
+                    SidebarTab.Files -> FileExplorer(state.projectName, state.tree, state.gitStatus, state.activeFile?.relativePath, onIntent, onFileOpened)
+                    SidebarTab.Search -> GlobalSearchPanel(
+                        state = state.search,
+                        onQueryChange = { onIntent(WorkspaceIntent.SearchQuery(it)) },
+                        onGlobsChange = { onIntent(WorkspaceIntent.SearchGlobs(it)) },
+                        onOptionsChange = { onIntent(WorkspaceIntent.SearchOptions(it)) },
+                        onOpenHit = { f, hit -> onIntent(WorkspaceIntent.OpenSearchHit(f, hit)); onFileOpened() },
+                    )
+                    SidebarTab.Git -> {
+                        val git by gitViewModel.state.collectAsStateWithLifecycle()
+                        GitPanel(git, gitViewModel::onIntent, { onIntent(WorkspaceIntent.OpenFile(it)); onFileOpened() })
+                    }
+                    SidebarTab.Maven -> {
+                        val deps by dependencyViewModel.state.collectAsStateWithLifecycle()
+                        DependencyExplorerScreen(deps, dependencyViewModel::onIntent)
+                    }
                 }
             }
         }
+        val menu = StudioMenuActions(
+            onSigning = { signingOpen = true },
+            onEditorSettings = { onIntent(WorkspaceIntent.SetPreferences(true)) },
+            onNewProject = onNewProject,
+            onSettings = onOpenSettings,
+            onCloseProject = onCloseProject,
+        )
+        val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        val bottom: @Composable (Dp) -> Unit = { available ->
+            if (imeVisible && state.activeFile != null) {
+                ExtraKeysBar({ onIntent(WorkspaceIntent.Key(it)) }, canUndo, canRedo, state.errorCount > 0, prefs.hapticExtraKeys)
+            } else {
+                DeveloperDock(
+                    state = state,
+                    tabs = consoleTabs,
+                    lastTab = if (lastConsoleTab in consoleTabs) lastConsoleTab else DockTab.Build,
+                    available = available,
+                    onIntent = onIntent,
+                    content = dockContent,
+                )
+            }
+        }
 
-        if (expanded) {
+        if (split) {
             var sidebarVisible by rememberSaveable { mutableStateOf(true) }
+            var explorerWidth by rememberSaveable { mutableStateOf(Sizes.ExplorerPane.value) }
+            var aiWidth by rememberSaveable { mutableStateOf(Sizes.AiPane.value) }
+            LaunchedEffect(sidebarRequest) { if (sidebarRequest > 0) sidebarVisible = true }
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
                 TopStudioBar(
                     state = state,
                     compact = false,
-                    aiVisible = aiDockVisible,
+                    aiVisible = aiVisible,
+                    showAiToggle = true,
                     onToggleSidebar = { sidebarVisible = !sidebarVisible },
                     onIntent = onIntent,
-                    onToggleAi = { aiDockVisible = !aiDockVisible },
-                    onOpenSettings = onOpenSettings,
-                    onCloseProject = onCloseProject,
+                    onToggleAi = { aiPaneVisible = !aiVisible },
+                    menu = menu,
                 )
-                Hairline()
                 Row(Modifier.weight(1f).fillMaxWidth()) {
-                    AnimatedVisibility(sidebarVisible) {
+                    AnimatedVisibility(
+                        sidebarVisible,
+                        enter = expandHorizontally(Motion.spatial()) + fadeIn(Motion.switch()),
+                        exit = shrinkHorizontally(Motion.spatial()) + fadeOut(Motion.switch()),
+                    ) {
                         Row {
-                            FileExplorer(state.projectName, state.tree, state.gitStatus, state.activeFile?.relativePath, onIntent, {}, Modifier.width(280.dp))
-                            VerticalHairline()
+                            sidebar(Modifier.width(explorerWidth.dp).fillMaxHeight()) {}
+                            PaneDivider { delta -> explorerWidth = (explorerWidth + delta).coerceIn(200f, 420f) }
                         }
                     }
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
-                        editorArea(Modifier.weight(1f))
-                        if (state.activeFile != null && WindowInsets.ime.getBottom(LocalDensity.current) > 0) {
-                            ExtraKeysBar({ onIntent(WorkspaceIntent.Key(it)) }, canUndo, canRedo, state.errorCount > 0, prefs.hapticExtraKeys)
-                        }
-                        val consoleTabs = DockTab.entries - DockTab.Ai
-                        if (state.dockVisible && state.dockTab != DockTab.Ai) {
-                            ResizableDock(state.dockTab, consoleTabs, onIntent, maxDock) { tab -> dockContent(tab, Modifier.fillMaxSize()) }
-                        } else {
-                            DockLauncher(consoleTabs, state, onIntent)
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+                        val available = maxHeight
+                        Column(Modifier.fillMaxSize()) {
+                            editorArea(Modifier.weight(1f))
+                            bottom(available)
                         }
                     }
-                    AnimatedVisibility(aiDockVisible) {
+                    AnimatedVisibility(
+                        aiVisible,
+                        enter = expandHorizontally(Motion.spatial(), expandFrom = Alignment.End) + fadeIn(Motion.switch()),
+                        exit = shrinkHorizontally(Motion.spatial(), shrinkTowards = Alignment.End) + fadeOut(Motion.switch()),
+                    ) {
                         Row {
-                            VerticalHairline()
-                            Box(Modifier.width(380.dp).fillMaxHeight().background(CodeinTheme.colors.panel)) { dockContent(DockTab.Ai, Modifier.fillMaxSize()) }
+                            PaneDivider { delta -> aiWidth = (aiWidth - delta).coerceIn(280f, 520f) }
+                            Box(Modifier.width(aiWidth.dp).fillMaxHeight().background(CodeinTheme.colors.tier1)) {
+                                dockContent(DockTab.Ai, Modifier.fillMaxSize())
+                            }
                         }
                     }
                 }
             }
         } else {
             val drawerState = rememberDrawerState(DrawerValue.Closed)
+            val scope = rememberCoroutineScope()
+            LaunchedEffect(sidebarRequest) { if (sidebarRequest > 0) drawerState.open() }
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 gesturesEnabled = drawerState.isOpen,
+                scrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
                 drawerContent = {
-                    ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = CodeinTheme.colors.panel) {
-                        FileExplorer(
-                            state.projectName, state.tree, state.gitStatus, state.activeFile?.relativePath, onIntent,
-                            onFileOpened = { scope.launch { drawerState.close() } },
-                            modifier = Modifier.statusBarsPadding(),
-                        )
+                    ModalDrawerSheet(
+                        modifier = Modifier.width(Sizes.DrawerWidth),
+                        drawerContainerColor = CodeinTheme.colors.tier1,
+                        drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
+                        windowInsets = WindowInsets(0, 0, 0, 0),
+                    ) {
+                        sidebar(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) { scope.launch { drawerState.close() } }
                     }
                 },
             ) {
@@ -297,40 +418,51 @@ fun WorkspaceScreen(
                     TopStudioBar(
                         state = state,
                         compact = true,
-                        aiVisible = state.dockVisible && state.dockTab == DockTab.Ai,
+                        aiVisible = false,
+                        showAiToggle = false,
                         onToggleSidebar = { scope.launch { drawerState.open() } },
                         onIntent = onIntent,
-                        onToggleAi = {
-                            if (state.dockVisible && state.dockTab == DockTab.Ai) onIntent(WorkspaceIntent.HideDock)
-                            else onIntent(WorkspaceIntent.ShowDock(DockTab.Ai))
-                        },
-                        onOpenSettings = onOpenSettings,
-                        onCloseProject = onCloseProject,
+                        onToggleAi = {},
+                        menu = menu,
                     )
-                    Hairline()
-                    editorArea(Modifier.weight(1f))
-                    if (state.dockVisible) {
-                        ResizableDock(state.dockTab, DockTab.entries, onIntent, maxDock) { tab -> dockContent(tab, Modifier.fillMaxSize()) }
-                    } else {
-                        if (state.activeFile != null) {
-                            ExtraKeysBar({ onIntent(WorkspaceIntent.Key(it)) }, canUndo, canRedo, state.errorCount > 0, prefs.hapticExtraKeys)
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                        val available = maxHeight
+                        Column(Modifier.fillMaxSize()) {
+                            editorArea(Modifier.weight(1f))
+                            bottom(available)
                         }
-                        DockLauncher(DockTab.entries, state, onIntent)
                     }
                 }
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 56.dp))
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = Sizes.StatusBar + Spacing.lg))
     }
 
     if (state.paletteOpen) {
-        val items = rememberPaletteItems(state, onIntent, onOpenSettings, toggleAi = { aiDockVisible = !aiDockVisible })
+        val items = rememberPaletteItems(
+            state = state,
+            onIntent = onIntent,
+            onOpenSettings = onOpenSettings,
+            onOpenSigning = { signingOpen = true },
+            onNewProject = onNewProject,
+            toggleAi = { onIntent(WorkspaceIntent.ShowDock(DockTab.Ai)) },
+        )
         key(state.paletteQuery) {
             CommandPalette(items = items, onDismiss = { onIntent(WorkspaceIntent.SetPalette(false)) }, initialQuery = state.paletteQuery)
         }
     }
     if (state.preferencesOpen) {
         EditorPreferencesSheet(prefs, onChange = { onIntent(WorkspaceIntent.Preference(it)) }, onDismiss = { onIntent(WorkspaceIntent.SetPreferences(false)) })
+    }
+    if (signingOpen) {
+        val vault by vaultViewModel.state.collectAsStateWithLifecycle()
+        SigningSheet(
+            vault = vault,
+            onVaultIntent = vaultViewModel::onIntent,
+            build = state.build,
+            onIntent = onIntent,
+            onDismiss = { signingOpen = false },
+        )
     }
 }
 
@@ -347,22 +479,96 @@ private fun CodeEditorController.execute(command: EditorCommand) {
     }
 }
 
+/** Unified sidebar: segmented Files / Search / Git / Maven tabs over the selected tool. */
+@Composable
+private fun WorkspaceSidebar(
+    tab: SidebarTab,
+    onTab: (SidebarTab) -> Unit,
+    modifier: Modifier,
+    content: @Composable (SidebarTab) -> Unit,
+) {
+    Column(modifier.background(CodeinTheme.colors.tier1)) {
+        SegmentedTabs(
+            items = SidebarTab.entries.toList(),
+            selected = tab,
+            onSelect = onTab,
+            icon = {
+                when (it) {
+                    SidebarTab.Files -> CodeinIcons.Folder
+                    SidebarTab.Search -> CodeinIcons.Regex
+                    SidebarTab.Git -> CodeinIcons.GitBranch
+                    SidebarTab.Maven -> CodeinIcons.Package
+                }
+            },
+            label = { it.title },
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        )
+        HairlineDivider()
+        AnimatedContent(
+            targetState = tab,
+            transitionSpec = { fadeIn(Motion.switch()) togetherWith fadeOut(Motion.switch()) },
+            label = "sidebar-tab",
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) { t -> Box(Modifier.fillMaxSize()) { content(t) } }
+    }
+}
+
+/**
+ * A 1dp vertical pane divider with a wider invisible grab area. While dragging it thickens to a
+ * 2dp accent line.
+ */
+@Composable
+private fun PaneDivider(onDrag: (Float) -> Unit) {
+    val density = LocalDensity.current
+    val interaction = remember { MutableInteractionSource() }
+    val dragging by interaction.collectIsDraggedAsState()
+    val width by animateDpAsState(if (dragging) 2.dp else 1.dp, Motion.spatial(), label = "divider-width")
+    val color by animateColorAsState(
+        if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        Motion.switch(),
+        label = "divider-color",
+    )
+    Box(Modifier.width(1.dp).fillMaxHeight().zIndex(1f), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .requiredWidth(Spacing.md)
+                .fillMaxHeight()
+                .draggable(
+                    state = rememberDraggableState { delta -> onDrag(with(density) { delta.toDp().value }) },
+                    orientation = Orientation.Horizontal,
+                    interactionSource = interaction,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.width(width).fillMaxHeight().background(color))
+        }
+    }
+}
+
 @Composable
 private fun EditorArea(
     state: WorkspaceState,
-    prefs: com.codein.ide.core.ui.prefs.EditorPreferences,
+    prefs: EditorPreferences,
     controller: CodeEditorController,
-    diagnostics: List<com.codein.ide.editor.sora.EditorDiagnostic>,
+    diagnostics: List<EditorDiagnostic>,
     onIntent: (WorkspaceIntent) -> Unit,
     onUndoRedo: (Boolean, Boolean) -> Unit,
     onOpenPalette: () -> Unit,
     modifier: Modifier,
 ) {
+    val scheme = CodeinTheme.editorScheme
     Column(modifier.fillMaxWidth()) {
         EditorTabStrip(state.tabs, state.activeIndex, onIntent)
         val active = state.activeFile
-        Breadcrumbs(active?.relativePath, state.cursor.line, state.cursor.column, state.errorCount)
-        Box(Modifier.weight(1f).fillMaxWidth().background(prefs.editorScheme.background)) {
+        Breadcrumbs(active?.relativePath, active?.isDirty == true)
+        // Switching files keeps the same editor view (it is expensive to recreate), so the 180ms
+        // vertical slide + fade is applied as a graphics layer on the existing view.
+        val switch = remember { Animatable(1f) }
+        LaunchedEffect(active?.relativePath) {
+            switch.snapTo(0f)
+            switch.animateTo(1f, tween(Motion.SwitchMillis))
+        }
+        Box(Modifier.weight(1f).fillMaxWidth().background(scheme.background)) {
             if (active == null) {
                 EmptyState(
                     icon = CodeinIcons.Code,
@@ -377,7 +583,7 @@ private fun EditorArea(
                     controller = controller,
                     document = EditorDocument(active.relativePath, active.name, active.content, active.version),
                     preferences = prefs,
-                    scheme = prefs.editorScheme,
+                    scheme = scheme,
                     diagnostics = diagnostics,
                     onTextChanged = {
                         onIntent(WorkspaceIntent.TextChanged(it))
@@ -387,7 +593,11 @@ private fun EditorArea(
                     onDiagnosticTapped = { d ->
                         state.build.diagnostics.firstOrNull { it.line == d.line && it.message == d.message }?.let { onIntent(WorkspaceIntent.ShowDock(DockTab.Build)) }
                     },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        val p = switch.value
+                        alpha = 0.35f + 0.65f * p
+                        translationY = (1f - p) * Spacing.sm.toPx()
+                    },
                 )
                 FindReplaceBar(state.find, { onIntent(WorkspaceIntent.Find(it)) }, Modifier.align(Alignment.TopEnd))
             }
@@ -395,66 +605,191 @@ private fun EditorArea(
     }
 }
 
-/** Bottom dock with a draggable top edge. */
+/**
+ * The docked developer sheet. Collapsed it is a 38dp status ticker (build status, error/warning
+ * counters, cursor Ln:Col and tab triggers); dragging the handle snaps it to 42% or 88% of the
+ * available height on a no-bounce spring, with a haptic tick at every snap point.
+ */
 @Composable
-private fun ResizableDock(
-    selected: DockTab,
+private fun DeveloperDock(
+    state: WorkspaceState,
     tabs: List<DockTab>,
+    lastTab: DockTab,
+    available: Dp,
     onIntent: (WorkspaceIntent) -> Unit,
-    maxHeight: Dp,
-    content: @Composable (DockTab) -> Unit,
+    content: @Composable (DockTab, Modifier) -> Unit,
 ) {
     val density = LocalDensity.current
-    var heightPx by rememberSaveable { mutableFloatStateOf(with(density) { 320.dp.toPx() }) }
-    val minPx = with(density) { 160.dp.toPx() }
-    val maxPx = with(density) { maxHeight.toPx() }.coerceAtLeast(minPx)
-    val dragState = rememberDraggableState { delta -> heightPx = (heightPx - delta).coerceIn(minPx, maxPx) }
-    Column(Modifier.fillMaxWidth().height(with(density) { heightPx.coerceIn(minPx, maxPx).toDp() }).background(CodeinTheme.colors.panel)) {
-        Hairline()
-        Box(
-            Modifier.fillMaxWidth().height(18.dp).draggable(dragState, Orientation.Vertical),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(Modifier.size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.outline))
-        }
-        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                tabs.forEach { tab ->
-                    PillChip(tab.title, icon = tab.icon(), selected = tab == selected, onClick = { onIntent(WorkspaceIntent.ShowDock(tab)) })
-                }
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    var openDetent by rememberSaveable { mutableStateOf(DockDetent.Half) }
+    val currentTab = if (state.dockTab in tabs) state.dockTab else lastTab
+    val detent = if (state.dockVisible && state.dockTab in tabs) openDetent else DockDetent.Collapsed
+
+    val collapsedPx = with(density) { Sizes.StatusBar.toPx() }
+    val availablePx = with(density) { available.toPx() }.coerceAtLeast(collapsedPx)
+    fun heightFor(d: DockDetent): Float = when (d) {
+        DockDetent.Collapsed -> collapsedPx
+        DockDetent.Half -> (availablePx * Sizes.DockHalf).coerceAtLeast(collapsedPx)
+        DockDetent.Expanded -> (availablePx * Sizes.DockFull).coerceAtLeast(collapsedPx)
+    }
+    val height = remember { Animatable(heightFor(detent)) }
+    LaunchedEffect(detent, availablePx) { height.animateTo(heightFor(detent), Motion.spatial()) }
+
+    fun settle(d: DockDetent) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        when (d) {
+            DockDetent.Collapsed -> onIntent(WorkspaceIntent.HideDock)
+            else -> {
+                openDetent = d
+                if (!state.dockVisible || state.dockTab !in tabs) onIntent(WorkspaceIntent.ShowDock(currentTab))
             }
-            ToolbarIconButton(CodeinIcons.ChevronDown, "Hide panel", size = 32.dp) { onIntent(WorkspaceIntent.HideDock) }
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) { content(selected) }
+        scope.launch { height.animateTo(heightFor(d), Motion.spatial()) }
+    }
+
+    val dragState = rememberDraggableState { delta ->
+        scope.launch { height.snapTo((height.value - delta).coerceIn(collapsedPx, heightFor(DockDetent.Expanded))) }
+    }
+    val dragModifier = Modifier.draggable(
+        state = dragState,
+        orientation = Orientation.Vertical,
+        onDragStopped = { velocity ->
+            val current = height.value
+            val target = when {
+                velocity < -1200f -> if (current < heightFor(DockDetent.Half)) DockDetent.Half else DockDetent.Expanded
+                velocity > 1200f -> if (current > heightFor(DockDetent.Half)) DockDetent.Half else DockDetent.Collapsed
+                else -> DockDetent.entries.minBy { abs(heightFor(it) - current) }
+            }
+            settle(target)
+        },
+    )
+    val open = height.value > collapsedPx + 1f
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .height(with(density) { height.value.toDp() })
+            .background(CodeinTheme.colors.tier1),
+    ) {
+        HairlineDivider()
+        Box(Modifier.fillMaxWidth().height(Sizes.StatusBar - 1.dp).then(dragModifier)) {
+            DragHandle(Modifier.align(Alignment.TopCenter).padding(top = 2.dp), active = open)
+            if (detent == DockDetent.Collapsed) {
+                StatusTicker(state, tabs, onOpen = { tab -> onIntent(WorkspaceIntent.ShowDock(tab)) })
+            } else {
+                DockHeader(
+                    tabs = tabs,
+                    current = currentTab,
+                    expanded = detent == DockDetent.Expanded,
+                    onTab = { onIntent(WorkspaceIntent.ShowDock(it)) },
+                    onToggleExpand = { settle(if (detent == DockDetent.Expanded) DockDetent.Half else DockDetent.Expanded) },
+                    onCollapse = { settle(DockDetent.Collapsed) },
+                )
+            }
+        }
+        if (open) {
+            HairlineDivider()
+            AnimatedContent(
+                targetState = currentTab,
+                transitionSpec = { fadeIn(Motion.switch()) togetherWith fadeOut(Motion.switch()) },
+                label = "dock-tab",
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) { tab -> content(tab, Modifier.fillMaxSize()) }
+        }
     }
 }
 
-/** Collapsed dock: one row of tab shortcuts with live status. */
 @Composable
-private fun DockLauncher(tabs: List<DockTab>, state: WorkspaceState, onIntent: (WorkspaceIntent) -> Unit) {
-    Column(Modifier.fillMaxWidth().background(CodeinTheme.colors.panel)) {
-        Hairline()
+private fun DockHeader(
+    tabs: List<DockTab>,
+    current: DockTab,
+    expanded: Boolean,
+    onTab: (DockTab) -> Unit,
+    onToggleExpand: () -> Unit,
+    onCollapse: () -> Unit,
+) {
+    Row(Modifier.fillMaxSize().padding(start = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        SegmentedTabs(
+            items = tabs,
+            selected = current,
+            onSelect = onTab,
+            icon = { it.icon() },
+            label = { it.title },
+            modifier = Modifier.weight(1f).padding(top = Spacing.xs),
+        )
+        ToolbarIconButton(if (expanded) CodeinIcons.ChevronDown else CodeinIcons.ChevronUp, if (expanded) "Half height" else "Expand panel", size = 28.dp, onClick = onToggleExpand)
+        ToolbarIconButton(CodeinIcons.Minus, "Collapse panel", size = 28.dp, onClick = onCollapse)
+    }
+}
+
+/** Collapsed dock: build status, error/warning counters, cursor position and tab triggers. */
+@Composable
+private fun StatusTicker(state: WorkspaceState, tabs: List<DockTab>, onOpen: (DockTab) -> Unit) {
+    val build = state.build
+    val font = CodeinTheme.editorPreferences.codingFont
+    val errors = state.errorCount
+    val warnings = build.diagnostics.count { it.severity == Severity.Warning }
+    Row(Modifier.fillMaxSize().padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.weight(1f).clickable(onClickLabel = "Open build") { onOpen(DockTab.Build) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            tabs.forEach { tab ->
-                val label = when {
-                    tab == DockTab.Build && state.errorCount > 0 -> "Build · ${state.errorCount} errors"
-                    tab == DockTab.Build && state.build.running -> "Build · ${state.build.currentStep?.title ?: "running"}"
-                    else -> tab.title
-                }
-                PillChip(
-                    label,
-                    icon = tab.icon(),
-                    accent = if (tab == DockTab.Build && state.errorCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    selected = tab == DockTab.Build && (state.errorCount > 0 || state.build.running),
-                    onClick = { onIntent(WorkspaceIntent.ShowDock(tab)) },
-                )
+            BuildStatus(build, font)
+            if (errors > 0 || warnings > 0) Spacer(Modifier.width(Spacing.md))
+            if (errors > 0) Counter(CodeinIcons.AlertCircle, errors, MaterialTheme.colorScheme.error, font)
+            if (warnings > 0) {
+                Spacer(Modifier.width(Spacing.sm))
+                Counter(CodeinIcons.AlertTriangle, warnings, CodeinTheme.colors.warning, font)
             }
-            Spacer(Modifier.width(4.dp))
         }
+        if (state.activeFile != null) {
+            Text(
+                "Ln ${state.cursor.line + 1}:${state.cursor.column + 1}",
+                style = metricsTextStyle(font, 11f),
+                color = CodeinTheme.colors.textMuted,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = Spacing.sm),
+            )
+        }
+        tabs.forEach { tab ->
+            ToolbarIconButton(tab.icon(), "Open ${tab.title}", size = 28.dp, iconSize = Sizes.IconSm) { onOpen(tab) }
+        }
+    }
+}
+
+@Composable
+private fun BuildStatus(build: BuildUiState, font: CodingFont) {
+    val r = build.result
+    val (color, label) = when {
+        build.running -> MaterialTheme.colorScheme.primary to (build.currentStep?.let { stageLabel(it, build.variant) } ?: "Starting")
+        r is BuildResult.Success -> CodeinTheme.colors.success to "Built in ${formatDuration(r.durationMillis)}"
+        r is BuildResult.Failure -> MaterialTheme.colorScheme.error to "Failed at ${stageLabel(r.failedStep, build.variant)}"
+        r is BuildResult.Cancelled -> CodeinTheme.colors.warning to "Cancelled"
+        else -> CodeinTheme.colors.textMuted to "Ready · ${shortVariant(build.variant)}"
+    }
+    PulseDot(color, active = build.running)
+    Spacer(Modifier.width(Spacing.sm))
+    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val startedAt = build.startedAt
+    if (build.running && startedAt != null) {
+        var now by remember { mutableStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(startedAt) {
+            while (true) {
+                now = System.currentTimeMillis()
+                kotlinx.coroutines.delay(100)
+            }
+        }
+        Spacer(Modifier.width(Spacing.xs))
+        Text(formatDuration((now - startedAt).coerceAtLeast(0)), style = metricsTextStyle(font, 11f), color = CodeinTheme.colors.textMuted, maxLines = 1)
+    }
+}
+
+@Composable
+private fun Counter(icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int, color: androidx.compose.ui.graphics.Color, font: CodingFont) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(14.dp))
+        Text("$count", style = metricsTextStyle(font, 11f), color = color)
     }
 }
 
@@ -472,6 +807,8 @@ private fun rememberPaletteItems(
     state: WorkspaceState,
     onIntent: (WorkspaceIntent) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSigning: () -> Unit,
+    onNewProject: () -> Unit,
     toggleAi: () -> Unit,
 ): List<PaletteItem> {
     var files by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -510,16 +847,19 @@ private fun rememberPaletteItems(
             add(PaletteItem("a:save", "Save all", "", PaletteCategory.Action, CodeinIcons.Save, shortcut = "Ctrl+Shift+S") { onIntent(WorkspaceIntent.SaveAll) })
             add(PaletteItem("a:symbols", "Go to symbol in file", "Type # in the palette", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+O") { onIntent(WorkspaceIntent.SetPalette(true, "#")) })
             add(PaletteItem("a:find", "Find in file", "", PaletteCategory.Action, CodeinIcons.Search, shortcut = "Ctrl+F") { onIntent(WorkspaceIntent.OpenFind) })
-            add(PaletteItem("a:search", "Search in project", "", PaletteCategory.Action, CodeinIcons.Search, shortcut = "Ctrl+Shift+F") { onIntent(WorkspaceIntent.ShowDock(DockTab.Search)) })
-            add(PaletteItem("a:ai", "Toggle Codein AI", "", PaletteCategory.Action, CodeinIcons.Sparkle) { toggleAi(); onIntent(WorkspaceIntent.ShowDock(DockTab.Ai)) })
+            add(PaletteItem("a:search", "Search in project", "", PaletteCategory.Action, CodeinIcons.Regex, shortcut = "Ctrl+Shift+F") { onIntent(WorkspaceIntent.ShowDock(DockTab.Search)) })
+            add(PaletteItem("a:ai", "Open Codein AI", "", PaletteCategory.Action, CodeinIcons.Sparkle) { toggleAi() })
             add(PaletteItem("a:logcat", "Show Logcat", "", PaletteCategory.Action, CodeinIcons.Terminal) { onIntent(WorkspaceIntent.ShowDock(DockTab.Logcat)) })
             add(PaletteItem("a:git", "Source control", "", PaletteCategory.Action, CodeinIcons.GitBranch) { onIntent(WorkspaceIntent.ShowDock(DockTab.Git)) })
-            add(PaletteItem("a:deps", "Manage dependencies", "", PaletteCategory.Action, CodeinIcons.Package) { onIntent(WorkspaceIntent.ShowDock(DockTab.Dependencies)) })
-            add(PaletteItem("a:prefs", "Editor appearance", "", PaletteCategory.Appearance, CodeinIcons.Palette) { onIntent(WorkspaceIntent.SetPreferences(true)) })
+            add(PaletteItem("a:deps", "Manage Maven dependencies", "", PaletteCategory.Action, CodeinIcons.Package) { onIntent(WorkspaceIntent.ShowDock(DockTab.Dependencies)) })
+            add(PaletteItem("a:collapse", "Collapse all folders", "", PaletteCategory.Action, CodeinIcons.CollapseAll) { onIntent(WorkspaceIntent.CollapseAll) })
+            add(PaletteItem("a:signing", "Signing & AAB export", "Keystores, SHA fingerprints, signed .aab", PaletteCategory.Build, CodeinIcons.Key) { onOpenSigning() })
+            add(PaletteItem("a:new", "New project", "", PaletteCategory.Action, CodeinIcons.Plus) { onNewProject() })
+            add(PaletteItem("a:prefs", "Editor appearance", "Font, size, line height, theme", PaletteCategory.Appearance, CodeinIcons.Palette) { onIntent(WorkspaceIntent.SetPreferences(true)) })
             add(PaletteItem("a:settings", "Settings & toolchain", "", PaletteCategory.Action, CodeinIcons.Settings) { onOpenSettings() })
             BuildVariant.entries.forEach { v ->
-                add(PaletteItem("g:${v.name}", "Build variant: ${v.displayName}", "", PaletteCategory.Gradle, CodeinIcons.Layers) { onIntent(WorkspaceIntent.SetVariant(v)) })
-                add(PaletteItem("g:run:${v.name}", "assemble ${v.displayName}", "Switch variant and build", PaletteCategory.Gradle, CodeinIcons.Hammer) {
+                add(PaletteItem("g:${v.name}", "Build target: ${shortVariant(v)}", v.displayName, PaletteCategory.Gradle, CodeinIcons.Layers) { onIntent(WorkspaceIntent.SetVariant(v)) })
+                add(PaletteItem("g:run:${v.name}", "assemble ${v.displayName}", "Switch target and build", PaletteCategory.Gradle, CodeinIcons.Hammer) {
                     onIntent(WorkspaceIntent.SetVariant(v)); onIntent(WorkspaceIntent.Build)
                 })
             }

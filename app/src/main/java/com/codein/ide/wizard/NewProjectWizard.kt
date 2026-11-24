@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -46,6 +47,7 @@ import com.codein.ide.core.ui.components.PillChip
 import com.codein.ide.core.ui.components.ToolbarIconButton
 import com.codein.ide.core.ui.icons.CodeinIcons
 import com.codein.ide.core.ui.theme.CodeinTheme
+import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.home.HomeEvent
 import com.codein.ide.home.HomeViewModel
 import com.codein.ide.project.ProjectLanguage
@@ -98,26 +100,12 @@ fun NewProjectWizard(onBack: () -> Unit, onCreated: (String) -> Unit, viewModel:
                     when (current) {
                         0 -> {
                             Text("Choose a template", style = MaterialTheme.typography.titleMedium)
-                            ProjectTemplate.entries.forEach { t ->
-                                CodeinCard(Modifier.fillMaxWidth(), selected = t == template, onClick = { template = t }) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            when (t) {
-                                                ProjectTemplate.ComposeMaterial3 -> CodeinIcons.Layers
-                                                ProjectTemplate.EmptyViewsActivity -> CodeinIcons.Smartphone
-                                                ProjectTemplate.BottomNavigation -> CodeinIcons.PanelBottom
-                                            },
-                                            null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(28.dp),
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(t.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                            Text(t.description, style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
-                                            Text(if (t.supportsJava) "Kotlin or Java" else "Kotlin only", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                        }
+                            ProjectTemplate.entries.chunked(2).forEach { pair ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                                    pair.forEach { t ->
+                                        TemplateCard(t, selected = t == template, modifier = Modifier.weight(1f)) { template = t }
                                     }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
                             }
                         }
@@ -212,5 +200,58 @@ private fun StepDots(step: Int) {
                     .background(if (i <= step) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
             )
         }
+    }
+}
+
+/** A visual template card: a miniature phone preview of the generated UI above the name. */
+@Composable
+private fun TemplateCard(template: ProjectTemplate, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val accent = MaterialTheme.colorScheme.primary
+    CodeinCard(modifier, selected = selected, onClick = onClick, contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.md)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(112.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(CodeinTheme.colors.base),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Phone silhouette with a schematic of the template's first screen.
+            Column(
+                Modifier
+                    .width(56.dp)
+                    .height(96.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(CodeinTheme.colors.tier2)
+                    .padding(Spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            ) {
+                Box(Modifier.fillMaxWidth().height(Spacing.sm).clip(RoundedCornerShape(2.dp)).background(accent.copy(alpha = 0.7f)))
+                when (template) {
+                    ProjectTemplate.ComposeMaterial3 -> {
+                        repeat(3) { Box(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(4.dp)).background(CodeinTheme.colors.tier3)) }
+                        Spacer(Modifier.weight(1f))
+                        Box(Modifier.align(Alignment.End).size(14.dp).clip(RoundedCornerShape(4.dp)).background(accent))
+                    }
+                    ProjectTemplate.EmptyViewsActivity -> {
+                        Spacer(Modifier.weight(1f))
+                        Box(Modifier.align(Alignment.CenterHorizontally).width(32.dp).height(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)))
+                        Spacer(Modifier.weight(1f))
+                    }
+                    ProjectTemplate.BottomNavigation -> {
+                        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(4.dp)).background(CodeinTheme.colors.tier3))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            repeat(3) { i -> Box(Modifier.size(Spacing.sm).clip(CircleShape).background(if (i == 0) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))) }
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(Spacing.md))
+        Text(template.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2)
+        Spacer(Modifier.height(Spacing.xs))
+        Text(template.description, style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Spacer(Modifier.height(Spacing.sm))
+        PillChip(if (template.supportsJava) "Kotlin · Java" else "Kotlin", selected = selected)
     }
 }
