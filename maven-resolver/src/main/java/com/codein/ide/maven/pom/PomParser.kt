@@ -103,7 +103,7 @@ object PomParser {
 
     private fun text(element: Element, tag: String): String? = child(element, tag)?.textContent?.trim()?.takeIf { it.isNotEmpty() }
 
-    private val PROPERTY = Regex("""\$\{([^}]+)}""")
+    private val PROPERTY = Regex("""\$\{([^}]+)\}""")
 
     /** Replaces `${...}` references using [props]; unresolved references are left intact. */
     fun interpolate(value: String?, props: Map<String, String>): String? {
