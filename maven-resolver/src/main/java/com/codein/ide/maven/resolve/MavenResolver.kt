@@ -108,7 +108,10 @@ class MavenResolver @Inject constructor(
                 val children = mutableListOf<DependencyNode>()
                 for (dep in runtimeDependencies(pom.first)) {
                     if (dep.groupArtifact in exclusions || "${dep.group}:*" in exclusions || "*:*" in exclusions) continue
-                    val versionSpec = dep.version ?: pom.first.managedVersions[dep.groupArtifact] ?: continue
+                    // Gradle-published POMs sometimes carry "unspecified" for a dependency whose version
+                    // comes from a platform; the real version is requested elsewhere in the graph.
+                    val versionSpec = (dep.version?.takeUnless { it.isBlank() || it == "unspecified" }
+                        ?: pom.first.managedVersions[dep.groupArtifact]?.takeUnless { it == "unspecified" }) ?: continue
                     val concrete = if (MavenVersion.isDynamic(versionSpec)) {
                         MavenVersion.select(versionSpec, availableVersions(dep.group, dep.artifact, repositories)) ?: continue
                     } else MavenVersion.preferred(versionSpec)
@@ -142,7 +145,13 @@ class MavenResolver @Inject constructor(
                     onEvent(ResolveEvent.Failed(coordinate, e.message ?: "download failed"))
                 }
         }
-        ResolutionResult(artifacts.sortedBy { it.coordinate.toString() }, tree, failures)
+        // A failure only matters if it concerns the version that was finally selected; versions that
+        // lost conflict resolution in an earlier iteration are never used.
+        val relevantFailures = failures.filter { f ->
+            val chosen = selected[f.coordinate.groupArtifact]
+            chosen == null || chosen == f.coordinate.version
+        }.distinctBy { it.coordinate.toString() + "|" + it.reason }
+        ResolutionResult(artifacts.sortedBy { it.coordinate.toString() }, tree, relevantFailures)
     }
 
     private fun runtimeDependencies(pom: EffectivePom): List<PomDependency> =
@@ -261,10 +270,20 @@ class MavenResolver @Inject constructor(
     private suspend fun androidVariantOf(coordinate: MavenCoordinate, repositories: List<MavenRepository>): MavenCoordinate? {
         val key = coordinate.toString()
         if (redirectCache.containsKey(key)) return redirectCache[key]
+        // Persisted answer from an earlier build ("-" means the module has no Android variant).
+        val marker = File(cacheRoot, coordinate.path + "/${coordinate.artifact}-${coordinate.version}.codein-variant")
+        if (marker.isFile) {
+            val stored = marker.readText().trim()
+            val cached = if (stored == "-") null else runCatching { MavenCoordinate.parse(stored) }.getOrNull()
+            redirectCache[key] = cached
+            return cached
+        }
         var result: MavenCoordinate? = null
+        var reachedAnyRepository = false
         for (repo in repositories) {
             val url = http.artifactUrl(repo, coordinate.path + "/${coordinate.artifact}-${coordinate.version}.module")
             val text = runCatching { http.getText(url) }.getOrNull() ?: continue
+            reachedAnyRepository = true
             val root = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
             val variants = ((root["variants"] as? JsonArray) ?: JsonArray(emptyList())).map { it.jsonObject }
             fun attr(v: JsonObject, name: String) = (v["attributes"] as? JsonObject)?.get(name)?.jsonPrimitive?.content
@@ -278,6 +297,9 @@ class MavenResolver @Inject constructor(
             break
         }
         redirectCache[key] = result
+        if (result != null || reachedAnyRepository) {
+            runCatching { marker.parentFile?.mkdirs(); marker.writeText(result?.toString() ?: "-") }
+        }
         return result
     }
 
@@ -295,13 +317,17 @@ class MavenResolver @Inject constructor(
             else -> listOf(pom.packaging, "jar", "aar")
         }
         val orderedRepos = listOf(repo) + repositories.filter { it != repo }
+        // Check every cached extension before touching the network, so warm builds stay offline.
         for (ext in preferredExt) {
-            val fileName = "${coordinate.baseFileName}.$ext"
-            val local = File(cacheRoot, coordinate.path + "/" + fileName)
+            val local = File(cacheRoot, coordinate.path + "/${coordinate.baseFileName}.$ext")
             if (local.isFile && local.length() > 0) {
                 onEvent(ResolveEvent.CacheHit(coordinate))
                 return ResolvedArtifact(coordinate, typeOf(ext), local, repo, dependencies)
             }
+        }
+        for (ext in preferredExt) {
+            val fileName = "${coordinate.baseFileName}.$ext"
+            val local = File(cacheRoot, coordinate.path + "/" + fileName)
             for (r in orderedRepos) {
                 val bytes = runCatching { http.download(http.artifactUrl(r, coordinate.path + "/" + fileName), local) }.getOrNull() ?: continue
                 onEvent(ResolveEvent.Downloaded(coordinate, r.name, bytes))

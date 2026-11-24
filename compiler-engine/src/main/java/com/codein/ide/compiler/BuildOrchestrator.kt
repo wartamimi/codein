@@ -346,10 +346,11 @@ class BuildOrchestrator @Inject constructor(
         // Manifest merge.
         val appManifest = File(ctx.moduleDir, "src/main/AndroidManifest.xml")
         if (!appManifest.isFile) fail(step, DiagnosticSource.Aapt2, "Missing ${appManifest.path}")
-        val packageName = ctx.config.packageName
-        val applicationId = packageName + (ctx.config.buildTypes.firstOrNull { it.name == ctx.variantName }?.applicationIdSuffix ?: "")
+        // R and BuildConfig live in the namespace; the installed package is the application id.
+        val packageName = ctx.config.namespace ?: ctx.config.packageName
+        val applicationId = ctx.config.packageName + (ctx.config.buildTypes.firstOrNull { it.name == ctx.variantName }?.applicationIdSuffix ?: "")
         val libraryManifests = ctx.aars.map { it.manifest } + ctx.libraryModules.map { File(it.first, "src/main/AndroidManifest.xml") }
-        val merged = manifestMerger.merge(appManifest, libraryManifests, File(ctx.intermediates, "merged_manifest/AndroidManifest.xml"), applicationId)
+        val merged = manifestMerger.merge(appManifest, libraryManifests, File(ctx.intermediates, "merged_manifest/AndroidManifest.xml"), applicationId, namespace = packageName)
         merged.warnings.forEach { log(step, it, LogLevel.Warning) }
         log(step, "Merged ${libraryManifests.count { it.isFile }} library manifests")
 
@@ -372,6 +373,7 @@ class BuildOrchestrator @Inject constructor(
             versionCode = ctx.config.versionCode,
             versionName = ctx.config.versionName + (ctx.config.buildTypes.firstOrNull { it.name == ctx.variantName }?.versionNameSuffix ?: ""),
             packageName = packageName,
+            manifestPackage = applicationId,
             extraPackages = extraPackages,
             assetsDirs = assets,
             protoFormat = false,

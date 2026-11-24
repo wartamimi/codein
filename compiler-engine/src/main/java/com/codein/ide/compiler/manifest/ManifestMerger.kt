@@ -23,6 +23,14 @@ import javax.xml.transform.stream.StreamResult
  * - `tools:node="remove"` on an app node removes library nodes with the same name.
  * - `${applicationId}` and other placeholders are substituted.
  * - `uses-sdk` is stripped (aapt2 receives min/target SDK from the Gradle model).
+ * - Relative class names (`.MainActivity`, `MainActivity`) are fully qualified against the
+ *   declaring manifest's own package (the app namespace, or the library's package), before the
+ *   merged manifest's `package` is set to the application id. Without this, a library component
+ *   or an app with an `applicationIdSuffix` points at classes that do not exist and the app
+ *   crashes at launch with ClassNotFoundException.
+ * - When a library declares a component the app (or an earlier library) already has, such as the
+ *   shared `androidx.startup.InitializationProvider`, its `meta-data` children and missing
+ *   attributes are merged into the existing node instead of being dropped.
  */
 @Singleton
 class ManifestMerger @Inject constructor() {
@@ -35,6 +43,7 @@ class ManifestMerger @Inject constructor() {
         output: File,
         packageName: String,
         placeholders: Map<String, String> = emptyMap(),
+        namespace: String = packageName,
     ): MergeResult {
         val warnings = mutableListOf<String>()
         val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
@@ -43,13 +52,15 @@ class ManifestMerger @Inject constructor() {
 
         val appDoc = builder.parse(applyPlaceholders(appManifest.readText(), allPlaceholders).byteInputStream())
         val appRoot = appDoc.documentElement
+        val appNamespace = appRoot.getAttribute("package").ifEmpty { namespace }
+        qualifyClassNames(appRoot, appNamespace)
         appRoot.setAttribute("package", packageName)
         removeChildren(appRoot, "uses-sdk")
         val appApplication = firstChild(appRoot, "application") ?: appDoc.createElement("application").also { appRoot.appendChild(it) }
 
         val removedNames = collectRemovedNames(appRoot)
         val existingRootNames = rootChildNames(appRoot)
-        val existingAppNames = applicationChildNames(appApplication)
+        val existingAppNodes = elementChildren(appApplication).associateBy { it.tagName + "|" + androidName(it) }.toMutableMap()
 
         for (libManifest in libraryManifests) {
             if (!libManifest.isFile) continue
@@ -60,6 +71,8 @@ class ManifestMerger @Inject constructor() {
                 continue
             }
             val libRoot = libDoc.documentElement
+            val libPackage = libRoot.getAttribute("package")
+            if (libPackage.isNotEmpty()) qualifyClassNames(libRoot, libPackage)
             for (child in elementChildren(libRoot)) {
                 when (child.tagName) {
                     "uses-permission", "uses-permission-sdk-23", "uses-feature", "permission", "permission-group", "permission-tree" -> {
@@ -77,11 +90,16 @@ class ManifestMerger @Inject constructor() {
                         for (component in elementChildren(child)) {
                             val name = androidName(component)
                             val key = component.tagName + "|" + name
-                            if (name.isNotEmpty() && (key in existingAppNames || name in removedNames)) continue
+                            if (name.isNotEmpty() && name in removedNames) continue
+                            val existing = if (name.isNotEmpty()) existingAppNodes[key] else null
+                            if (existing != null) {
+                                mergeInto(existing, component, appDoc)
+                                continue
+                            }
                             val imported = appDoc.importNode(component, true) as Element
                             stripToolsAttributes(imported)
                             appApplication.appendChild(imported)
-                            existingAppNames += key
+                            if (name.isNotEmpty()) existingAppNodes[key] = imported
                         }
                     }
                 }
@@ -93,6 +111,54 @@ class ManifestMerger @Inject constructor() {
         output.parentFile?.mkdirs()
         writeDocument(appDoc, output)
         return MergeResult(output, warnings)
+    }
+
+    /** Adds [incoming]'s missing attributes and new `meta-data` children to [existing]. */
+    private fun mergeInto(existing: Element, incoming: Element, doc: Document) {
+        val attrs = incoming.attributes
+        for (i in 0 until attrs.length) {
+            val a = attrs.item(i)
+            if (a.namespaceURI == TOOLS_NS || a.nodeName.startsWith("tools:") || a.nodeName.startsWith("xmlns")) continue
+            val present = if (a.namespaceURI != null) existing.hasAttributeNS(a.namespaceURI, a.localName) else existing.hasAttribute(a.nodeName)
+            if (!present) existing.setAttributeNodeNS(doc.importNode(a, true) as org.w3c.dom.Attr)
+        }
+        val existingMeta = elementChildren(existing).filter { it.tagName == "meta-data" }.map { androidName(it) }.toMutableSet()
+        for (child in elementChildren(incoming)) {
+            if (child.tagName != "meta-data") continue
+            val name = androidName(child)
+            if (toolsNode(child) == "remove" || !existingMeta.add(name)) continue
+            val imported = doc.importNode(child, true) as Element
+            stripToolsAttributes(imported)
+            existing.appendChild(imported)
+        }
+    }
+
+    /**
+     * Fully qualifies relative component class names under `<application>` (and the
+     * application's own name and backup agent) against [pkg], as AGP's merger does.
+     */
+    private fun qualifyClassNames(root: Element, pkg: String) {
+        val application = firstChild(root, "application") ?: return
+        fun qualify(element: Element, attr: String) {
+            val value = element.getAttributeNS(ANDROID_NS, attr)
+            if (value.isEmpty() || value.contains("\${")) return
+            val qualified = when {
+                value.startsWith(".") -> pkg + value
+                !value.contains('.') -> "$pkg.$value"
+                else -> return
+            }
+            element.setAttributeNS(ANDROID_NS, "android:$attr", qualified)
+        }
+        qualify(application, "name")
+        qualify(application, "backupAgent")
+        for (component in elementChildren(application)) {
+            when (component.tagName) {
+                "activity", "service", "receiver", "provider" -> qualify(component, "name")
+                "activity-alias" -> { qualify(component, "name"); qualify(component, "targetActivity") }
+            }
+            if (component.tagName == "activity") qualify(component, "parentActivityName")
+        }
+        for (instrumentation in elementChildren(root).filter { it.tagName == "instrumentation" }) qualify(instrumentation, "name")
     }
 
     private fun applyPlaceholders(text: String, placeholders: Map<String, String>): String =
@@ -120,9 +186,6 @@ class ManifestMerger @Inject constructor() {
 
     private fun rootChildNames(root: Element): MutableSet<String> =
         elementChildren(root).map { it.tagName + "|" + androidName(it) }.toMutableSet()
-
-    private fun applicationChildNames(application: Element): MutableSet<String> =
-        elementChildren(application).map { it.tagName + "|" + androidName(it) }.toMutableSet()
 
     private fun collectRemovedNames(root: Element): Set<String> {
         val result = mutableSetOf<String>()

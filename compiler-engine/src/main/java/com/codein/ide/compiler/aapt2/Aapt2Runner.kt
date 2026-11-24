@@ -23,7 +23,10 @@ data class Aapt2LinkOptions(
     val targetSdk: Int,
     val versionCode: Int,
     val versionName: String,
+    /** Package of the generated R class (the module namespace). */
     val packageName: String,
+    /** Package written into the linked manifest (the application id, including any suffix). */
+    val manifestPackage: String? = null,
     val extraPackages: List<String> = emptyList(),
     val assetsDirs: List<File> = emptyList(),
     val protoFormat: Boolean = false,
@@ -73,7 +76,7 @@ class Aapt2Runner @Inject constructor() {
             add("--target-sdk-version"); add(options.targetSdk.toString())
             add("--version-code"); add(options.versionCode.toString())
             add("--version-name"); add(options.versionName)
-            add("--rename-manifest-package"); add(options.packageName)
+            add("--rename-manifest-package"); add(options.manifestPackage ?: options.packageName)
             add("--custom-package"); add(options.packageName)
             add("--auto-add-overlay")
             add("--no-version-vectors")
