@@ -17,7 +17,14 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       - name: Build debug APK
-        run: ./gradlew --no-daemon --stacktrace assembleDebug
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --continue assembleDebug 2>&1 | tee build.log
+      - name: Summarize compiler errors
+        if: failure()
+        run: |
+          echo "==== ERROR SUMMARY ===="
+          grep -E "^e: |^w: .*(deprecated)?|error:|What went wrong|Could not resolve|> Could not find" build.log | grep -v "^w: " | sort -u | head -n 300
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
       - uses: actions/upload-artifact@v4
