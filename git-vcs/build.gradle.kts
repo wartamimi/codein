@@ -34,6 +34,11 @@ dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":core-ui"))
     implementation(libs.jgit)
+    // JGit's SSH transport, with the maintained JSch fork (rsa-sha2-256/512) instead of com.jcraft:jsch.
+    implementation(libs.jgit.ssh.jsch) {
+        exclude(group = "com.jcraft", module = "jsch")
+    }
+    implementation(libs.jsch)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

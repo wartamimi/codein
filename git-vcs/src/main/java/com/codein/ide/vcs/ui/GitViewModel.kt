@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.io.File
 import javax.inject.Inject
 
@@ -30,6 +32,8 @@ data class GitPanelState(
     val diffText: String = "",
     val busy: String? = null,
     val credentials: GitCredentials = GitCredentials("", "", "", ""),
+    /** OpenSSH public key of Codein's SSH identity, or null when none was generated. */
+    val sshPublicKey: String? = null,
 )
 
 sealed interface GitIntent {
@@ -47,6 +51,9 @@ sealed interface GitIntent {
     data object Push : GitIntent
     data object Pull : GitIntent
     data class SaveCredentials(val username: String, val token: String?, val authorName: String, val authorEmail: String) : GitIntent
+    data object GenerateSshKey : GitIntent
+    data object DeleteSshKey : GitIntent
+    data object ClearKnownHosts : GitIntent
 }
 
 @HiltViewModel
@@ -63,6 +70,10 @@ class GitViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { credentialsRepository.credentials.collect { c -> _state.update { it.copy(credentials = c) } } }
+        viewModelScope.launch {
+            val key = withContext(Dispatchers.IO) { git.ssh.publicKey() }
+            _state.update { it.copy(sshPublicKey = key) }
+        }
     }
 
     fun setProject(dir: File) {
@@ -102,6 +113,26 @@ class GitViewModel @Inject constructor(
             is GitIntent.SetRemote -> run("Saving remote") { git.setRemote(dir, intent.url.trim()); "Remote origin set" }
             GitIntent.Push -> run("Pushing") { git.push(dir, credentialsRepository.current()) }
             GitIntent.Pull -> run("Pulling") { git.pull(dir, credentialsRepository.current()) }
+            GitIntent.GenerateSshKey -> viewModelScope.launch {
+                _state.update { it.copy(busy = "Generating SSH key") }
+                val result = runCatching {
+                    withContext(Dispatchers.Default) {
+                        val email = _state.value.credentials.authorEmail
+                        git.ssh.generateKey(email.ifBlank { "codein@android" })
+                    }
+                }
+                _state.update { it.copy(busy = null, sshPublicKey = result.getOrNull() ?: it.sshPublicKey) }
+                _messages.emit(result.fold({ "SSH key generated. Add the public key to your Git host." }, { "Key generation failed: ${it.message}" }))
+            }
+            GitIntent.DeleteSshKey -> viewModelScope.launch {
+                withContext(Dispatchers.IO) { git.ssh.deleteKey() }
+                _state.update { it.copy(sshPublicKey = null) }
+                _messages.emit("SSH key deleted")
+            }
+            GitIntent.ClearKnownHosts -> viewModelScope.launch {
+                withContext(Dispatchers.IO) { git.ssh.clearKnownHosts() }
+                _messages.emit("Trusted SSH hosts cleared")
+            }
             is GitIntent.SaveCredentials -> viewModelScope.launch {
                 credentialsRepository.save(intent.username, intent.token, intent.authorName, intent.authorEmail)
                 _messages.emit("Git credentials saved")

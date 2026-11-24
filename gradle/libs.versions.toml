@@ -24,6 +24,7 @@ guava = "33.3.1-jre"
 documentfile = "1.0.1"
 bouncycastle = "1.80"
 jgit = "5.13.3.202401111512-r"
+jsch = "0.2.20"
 desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
@@ -73,6 +74,8 @@ bundletool = { group = "com.android.tools.build", name = "bundletool", version.r
 bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.ref = "jgit" }
+jgit-ssh-jsch = { group = "org.eclipse.jgit", name = "org.eclipse.jgit.ssh.jsch", version.ref = "jgit" }
+jsch = { group = "com.github.mwiede", name = "jsch", version.ref = "jsch" }
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }

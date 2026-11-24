@@ -54,6 +54,9 @@ class GitOperationException(message: String, cause: Throwable? = null) : Excepti
 @Singleton
 class GitService @Inject constructor(@ApplicationContext context: Context) {
 
+    /** SSH identity and host-key store for `git@host:repo` remotes. */
+    val ssh = GitSsh(File(context.filesDir, "ssh"))
+
     init {
         // JGit resolves ~/.gitconfig from user.home, which is empty on Android.
         if (System.getProperty("user.home").isNullOrEmpty() || System.getProperty("user.home") == "/") {
@@ -76,12 +79,12 @@ class GitService @Inject constructor(@ApplicationContext context: Context) {
     }
 
     suspend fun clone(url: String, into: File, credentials: GitCredentials?): Unit = io("clone") {
-        Git.cloneRepository()
-            .setURI(url)
-            .setDirectory(into)
-            .setCredentialsProvider(credentials?.provider())
-            .call()
-            .close()
+        ssh.configure(
+            Git.cloneRepository()
+                .setURI(url)
+                .setDirectory(into)
+                .setCredentialsProvider(credentials?.provider()),
+        ).call().close()
     }
 
     suspend fun status(dir: File): GitStatusSnapshot = withContext(Dispatchers.IO) {
@@ -244,11 +247,12 @@ class GitService @Inject constructor(@ApplicationContext context: Context) {
     suspend fun push(dir: File, credentials: GitCredentials?): String = io("push") {
         open(dir).use { git ->
             val branch = git.repository.branch ?: throw GitOperationException("Not on a branch")
-            val results = git.push()
-                .setRemote("origin")
-                .add(branch)
-                .setCredentialsProvider(credentials?.provider())
-                .call()
+            val results = ssh.configure(
+                git.push()
+                    .setRemote("origin")
+                    .add(branch)
+                    .setCredentialsProvider(credentials?.provider()),
+            ).call()
             val problems = results.flatMap { it.remoteUpdates }.filter {
                 it.status != RemoteRefUpdate.Status.OK && it.status != RemoteRefUpdate.Status.UP_TO_DATE
             }
@@ -268,7 +272,7 @@ class GitService @Inject constructor(@ApplicationContext context: Context) {
 
     suspend fun pull(dir: File, credentials: GitCredentials?): String = io("pull") {
         open(dir).use { git ->
-            val result = git.pull().setRemote("origin").setCredentialsProvider(credentials?.provider()).call()
+            val result = ssh.configure(git.pull().setRemote("origin").setCredentialsProvider(credentials?.provider())).call()
             if (!result.isSuccessful) {
                 val merge = result.mergeResult
                 val conflicts = merge?.conflicts?.keys.orEmpty()

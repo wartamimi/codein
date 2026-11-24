@@ -1,6 +1,9 @@
 package com.codein.ide.vcs.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -140,9 +143,12 @@ fun GitPanel(state: GitPanelState, onIntent: (GitIntent) -> Unit, onOpenFile: (S
         }
     }
     if (showCredentials) {
-        CredentialsDialog(state, onDismiss = { showCredentials = false }) { user, token, name, email ->
-            onIntent(GitIntent.SaveCredentials(user, token, name, email)); showCredentials = false
-        }
+        CredentialsDialog(
+            state,
+            onDismiss = { showCredentials = false },
+            onSave = { user, token, name, email -> onIntent(GitIntent.SaveCredentials(user, token, name, email)); showCredentials = false },
+            onSsh = onIntent,
+        )
     }
 }
 
@@ -285,7 +291,13 @@ private fun SingleFieldDialog(title: String, initial: String, placeholder: Strin
 }
 
 @Composable
-private fun CredentialsDialog(state: GitPanelState, onDismiss: () -> Unit, onSave: (String, String?, String, String) -> Unit) {
+private fun CredentialsDialog(
+    state: GitPanelState,
+    onDismiss: () -> Unit,
+    onSave: (String, String?, String, String) -> Unit,
+    onSsh: (GitIntent) -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
     val c = state.credentials
     var user by rememberSaveable { mutableStateOf(c.username) }
     var token by rememberSaveable { mutableStateOf("") }
@@ -295,7 +307,7 @@ private fun CredentialsDialog(state: GitPanelState, onDismiss: () -> Unit, onSav
         onDismissRequest = onDismiss,
         title = { Text("Git identity & credentials") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Author name") }, singleLine = true)
                 OutlinedTextField(email, { email = it }, label = { Text("Author email") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                 OutlinedTextField(user, { user = it }, label = { Text("HTTPS username") }, singleLine = true)
@@ -307,6 +319,27 @@ private fun CredentialsDialog(state: GitPanelState, onDismiss: () -> Unit, onSav
                     visualTransformation = PasswordVisualTransformation(),
                 )
                 Text("Tokens are encrypted with the Android Keystore.", style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
+                Hairline()
+                Text("SSH key (for git@host:user/repo.git remotes)", style = MaterialTheme.typography.titleSmall)
+                val publicKey = state.sshPublicKey
+                if (publicKey == null) {
+                    Text("No key yet. Codein generates an RSA-3072 key stored privately on this device.", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+                    Button(onClick = { onSsh(GitIntent.GenerateSshKey) }, enabled = state.busy == null) { Text("Generate SSH key") }
+                } else {
+                    Text(
+                        publicKey,
+                        style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 10.5f, false),
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(8.dp),
+                    )
+                    Text("Add this public key to GitHub (Settings > SSH and GPG keys) or your Git host.", style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { clipboard.setText(AnnotatedString(publicKey)) }) { Text("Copy key") }
+                        TextButton(onClick = { onSsh(GitIntent.ClearKnownHosts) }) { Text("Forget hosts") }
+                        TextButton(onClick = { onSsh(GitIntent.DeleteSshKey) }) { Text("Delete") }
+                    }
+                }
             }
         },
         confirmButton = { TextButton(onClick = { onSave(user, token.ifEmpty { null }, name, email) }) { Text("Save") } },
