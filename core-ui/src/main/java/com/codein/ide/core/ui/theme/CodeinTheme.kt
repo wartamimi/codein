@@ -13,109 +13,44 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.codein.ide.core.ui.prefs.AppThemeMode
 import com.codein.ide.core.ui.prefs.EditorPreferences
 
-private val CodeinDarkColors = darkColorScheme(
-    primary = CodeinPalette.Accent,
-    onPrimary = CodeinPalette.AccentOn,
-    primaryContainer = CodeinPalette.AccentContainer,
-    onPrimaryContainer = Color(0xFFE4DFFF),
-    secondary = CodeinPalette.Teal,
-    onSecondary = CodeinPalette.AccentOn,
-    secondaryContainer = CodeinPalette.TealContainer,
-    onSecondaryContainer = Color(0xFFB7F5EC),
-    tertiary = CodeinPalette.Sky,
-    onTertiary = CodeinPalette.AccentOn,
-    background = CodeinPalette.Background,
-    onBackground = CodeinPalette.TextPrimary,
-    surface = CodeinPalette.Background,
-    onSurface = CodeinPalette.TextPrimary,
-    surfaceVariant = CodeinPalette.Card,
-    onSurfaceVariant = CodeinPalette.TextSecondary,
-    surfaceContainerLowest = Color(0xFF0B0D12),
-    surfaceContainerLow = CodeinPalette.Panel,
-    surfaceContainer = CodeinPalette.Panel,
-    surfaceContainerHigh = CodeinPalette.Card,
-    surfaceContainerHighest = CodeinPalette.CardHover,
-    outline = CodeinPalette.HairlineStrong,
-    outlineVariant = CodeinPalette.Hairline,
-    error = CodeinPalette.Error,
-    onError = CodeinPalette.AccentOn,
-    errorContainer = CodeinPalette.ErrorContainer,
-    onErrorContainer = Color(0xFFFFDAD6),
-    inverseSurface = CodeinPalette.TextPrimary,
-    inverseOnSurface = CodeinPalette.Background,
-    scrim = Color(0xCC000000),
-)
-
-private val CodeinLightColors = lightColorScheme(
-    primary = CodeinPalette.LightAccent,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE9E3FF),
-    onPrimaryContainer = Color(0xFF22145A),
-    secondary = Color(0xFF0F766E),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFCCFBF1),
-    onSecondaryContainer = Color(0xFF04332F),
-    background = CodeinPalette.LightBackground,
-    onBackground = CodeinPalette.LightTextPrimary,
-    surface = CodeinPalette.LightBackground,
-    onSurface = CodeinPalette.LightTextPrimary,
-    surfaceVariant = CodeinPalette.LightCard,
-    onSurfaceVariant = CodeinPalette.LightTextSecondary,
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = CodeinPalette.LightPanel,
-    surfaceContainer = CodeinPalette.LightPanel,
-    surfaceContainerHigh = CodeinPalette.LightCard,
-    surfaceContainerHighest = Color(0xFFE4E8ED),
-    outline = Color(0xFFAFB8C1),
-    outlineVariant = CodeinPalette.LightHairline,
-    error = Color(0xFFCF222E),
-    onError = Color.White,
-)
+/** Hairlines are the hairline source color at 30% alpha: the only depth cue besides surface tiers. */
+const val HairlineAlpha = 0.30f
 
 /** Extra semantic colors that Material 3 has no slot for. */
 @Immutable
 data class CodeinExtendedColors(
+    /** Tier 0: editor canvas / base. */
+    val base: Color,
+    /** Tier 1: sidebars, top bar, bottom dock. */
+    val tier1: Color,
+    /** Tier 2: cards, floating search, modals, active pills. */
+    val tier2: Color,
+    /** Tier 3: hover, pressed and selected highlight. */
+    val tier3: Color,
     val hairline: Color,
-    val panel: Color,
-    val card: Color,
     val success: Color,
     val warning: Color,
     val info: Color,
     val textMuted: Color,
+    /** Tier 2 at 95% alpha for floating, glass-like overlays (find bar, palette). */
     val glass: Color,
-)
+    val isDark: Boolean,
+) {
+    /** Legacy names for tier 1 / tier 2, kept for existing call sites. */
+    val panel: Color get() = tier1
+    val card: Color get() = tier2
+}
 
-private val DarkExtended = CodeinExtendedColors(
-    hairline = CodeinPalette.Hairline,
-    panel = CodeinPalette.Panel,
-    card = CodeinPalette.Card,
-    success = CodeinPalette.Success,
-    warning = CodeinPalette.Warning,
-    info = CodeinPalette.Info,
-    textMuted = CodeinPalette.TextMuted,
-    glass = Color(0xD9161922),
-)
-
-private val LightExtended = CodeinExtendedColors(
-    hairline = CodeinPalette.LightHairline,
-    panel = CodeinPalette.LightPanel,
-    card = CodeinPalette.LightCard,
-    success = Color(0xFF1A7F37),
-    warning = Color(0xFF9A6700),
-    info = Color(0xFF0969DA),
-    textMuted = Color(0xFF8C959F),
-    glass = Color(0xE6FFFFFF),
-)
-
-val LocalCodeinColors = staticCompositionLocalOf { DarkExtended }
-val LocalEditorScheme = staticCompositionLocalOf { EditorColorSchemes.CatppuccinMocha }
+val LocalCodeinColors = staticCompositionLocalOf { extendedColorsFor(EditorColorSchemes.Default) }
+val LocalEditorScheme = staticCompositionLocalOf { EditorColorSchemes.Default }
 val LocalEditorPreferences = staticCompositionLocalOf { EditorPreferences() }
 
 val CodeinShapes = Shapes(
@@ -130,44 +65,148 @@ val CodeinShapes = Shapes(
 object CodeinTheme {
     val colors: CodeinExtendedColors
         @Composable get() = LocalCodeinColors.current
+    /** The resolved theme (honours the app theme mode), shared by the editor and the chrome. */
     val editorScheme: EditorColorScheme
         @Composable get() = LocalEditorScheme.current
     val editorPreferences: EditorPreferences
         @Composable get() = LocalEditorPreferences.current
 }
 
+private fun extendedColorsFor(scheme: EditorColorScheme): CodeinExtendedColors {
+    val c = scheme.chrome
+    return CodeinExtendedColors(
+        base = c.base,
+        tier1 = c.tier1,
+        tier2 = c.tier2,
+        tier3 = c.tier3,
+        hairline = c.hairlineSource.copy(alpha = HairlineAlpha),
+        success = c.success,
+        warning = c.warning,
+        info = c.info,
+        textMuted = c.textMuted,
+        glass = c.tier2.copy(alpha = 0.95f),
+        isDark = scheme.isDark,
+    )
+}
+
+/** Maps a theme's [ChromePalette] onto the Material 3 color roles used across the app. */
+private fun materialColorsFor(scheme: EditorColorScheme): ColorScheme {
+    val c = scheme.chrome
+    val hairline = c.hairlineSource.copy(alpha = HairlineAlpha)
+    val outline = c.hairlineSource.copy(alpha = 0.55f)
+    val primaryContainer = lerp(c.tier2, c.accent, 0.28f)
+    val secondaryContainer = lerp(c.tier2, c.secondary, 0.24f)
+    val errorContainer = lerp(c.tier2, c.error, 0.22f)
+    return if (scheme.isDark) {
+        darkColorScheme(
+            primary = c.accent,
+            onPrimary = c.onAccent,
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = c.textPrimary,
+            secondary = c.secondary,
+            onSecondary = c.onAccent,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = c.textPrimary,
+            tertiary = c.info,
+            onTertiary = c.onAccent,
+            background = c.base,
+            onBackground = c.textPrimary,
+            surface = c.base,
+            onSurface = c.textPrimary,
+            surfaceVariant = c.tier2,
+            onSurfaceVariant = c.textSecondary,
+            surfaceTint = Color.Transparent,
+            surfaceContainerLowest = c.base,
+            surfaceContainerLow = c.tier1,
+            surfaceContainer = c.tier1,
+            surfaceContainerHigh = c.tier2,
+            surfaceContainerHighest = c.tier3,
+            surfaceBright = c.tier3,
+            surfaceDim = c.base,
+            outline = outline,
+            outlineVariant = hairline,
+            error = c.error,
+            onError = c.onAccent,
+            errorContainer = errorContainer,
+            onErrorContainer = c.textPrimary,
+            inverseSurface = c.textPrimary,
+            inverseOnSurface = c.base,
+            inversePrimary = c.accent,
+            scrim = Color(0xCC000000),
+        )
+    } else {
+        lightColorScheme(
+            primary = c.accent,
+            onPrimary = c.onAccent,
+            primaryContainer = lerp(Color.White, c.accent, 0.14f),
+            onPrimaryContainer = c.textPrimary,
+            secondary = c.secondary,
+            onSecondary = c.onAccent,
+            secondaryContainer = lerp(Color.White, c.secondary, 0.14f),
+            onSecondaryContainer = c.textPrimary,
+            tertiary = c.info,
+            onTertiary = c.onAccent,
+            background = c.base,
+            onBackground = c.textPrimary,
+            surface = c.base,
+            onSurface = c.textPrimary,
+            surfaceVariant = c.tier2,
+            onSurfaceVariant = c.textSecondary,
+            surfaceTint = Color.Transparent,
+            surfaceContainerLowest = c.base,
+            surfaceContainerLow = c.tier1,
+            surfaceContainer = c.tier1,
+            surfaceContainerHigh = c.tier2,
+            surfaceContainerHighest = c.tier3,
+            surfaceBright = c.base,
+            surfaceDim = c.tier3,
+            outline = outline,
+            outlineVariant = hairline,
+            error = c.error,
+            onError = Color.White,
+            errorContainer = lerp(Color.White, c.error, 0.14f),
+            onErrorContainer = c.textPrimary,
+            inverseSurface = c.textPrimary,
+            inverseOnSurface = c.base,
+            inversePrimary = c.accent,
+            scrim = Color(0x99000000),
+        )
+    }
+}
+
+/**
+ * Codein's root theme. The selected [EditorColorScheme] drives both the code editor and the app
+ * chrome (surface tiers, accent, hairlines), so switching between Codein Obsidian, Catppuccin
+ * Mocha, One Dark Pro, Tokyo Night and Clean Daylight recolors the whole IDE at once.
+ */
 @Composable
 fun CodeinTheme(
     preferences: EditorPreferences = EditorPreferences(),
     content: @Composable () -> Unit,
 ) {
     val systemDark = isSystemInDarkTheme()
-    val dark = when (preferences.themeMode) {
-        AppThemeMode.Dark -> true
-        AppThemeMode.Light -> false
-        AppThemeMode.System -> systemDark
-    }
+    val scheme = preferences.resolveScheme(systemDark)
     val context = LocalContext.current
-    val colorScheme: ColorScheme = when {
-        preferences.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) {
-                dynamicDarkColorScheme(context).copy(
-                    background = CodeinPalette.Background,
-                    surface = CodeinPalette.Background,
-                    surfaceContainerLow = CodeinPalette.Panel,
-                    surfaceContainer = CodeinPalette.Panel,
-                    surfaceContainerHigh = CodeinPalette.Card,
-                    outlineVariant = CodeinPalette.Hairline,
-                )
-            } else {
-                dynamicLightColorScheme(context)
-            }
-        dark -> CodeinDarkColors
-        else -> CodeinLightColors
+    val base = remember(scheme) { materialColorsFor(scheme) }
+    val colorScheme: ColorScheme = if (preferences.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        // Material You only tints the accents; Codein keeps its own calibrated surface tiers.
+        val dynamic = if (scheme.isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        base.copy(
+            primary = dynamic.primary,
+            onPrimary = dynamic.onPrimary,
+            primaryContainer = dynamic.primaryContainer,
+            onPrimaryContainer = dynamic.onPrimaryContainer,
+            secondary = dynamic.secondary,
+            onSecondary = dynamic.onSecondary,
+            tertiary = dynamic.tertiary,
+        )
+    } else {
+        base
     }
+    val extended = remember(scheme) { extendedColorsFor(scheme) }
     CompositionLocalProvider(
-        LocalCodeinColors provides if (dark) DarkExtended else LightExtended,
-        LocalEditorScheme provides preferences.editorScheme,
+        LocalCodeinColors provides extended,
+        LocalEditorScheme provides scheme,
         LocalEditorPreferences provides preferences,
     ) {
         MaterialTheme(

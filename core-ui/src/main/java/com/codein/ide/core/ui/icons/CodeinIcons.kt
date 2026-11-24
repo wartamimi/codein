@@ -477,4 +477,26 @@ object CodeinIcons {
             moveTo(5.5f, 16.5f); curveTo(4f, 17.8f, 3.5f, 20.5f, 3.5f, 20.5f); curveTo(3.5f, 20.5f, 6.2f, 20f, 7.5f, 18.5f)
         }
     }
+    val PanelRight by lazy { icon("PanelRight") { roundRect(3f, 4f, 21f, 20f, 2.5f); line(15f, 4f, 15f, 20f) } }
+    val CollapseAll by lazy {
+        icon("CollapseAll") {
+            roundRect(4f, 4f, 20f, 20f, 2.5f)
+            line(8.5f, 12f, 15.5f, 12f)
+        }
+    }
+    val Export by lazy {
+        icon("Export") {
+            line(12f, 15f, 12f, 3.5f)
+            moveTo(7.5f, 8f); lineTo(12f, 3.5f); lineTo(16.5f, 8f)
+            moveTo(4f, 13f); lineTo(4f, 18.5f); curveTo(4f, 19.6f, 4.9f, 20.5f, 6f, 20.5f)
+            lineTo(18f, 20.5f); curveTo(19.1f, 20.5f, 20f, 19.6f, 20f, 18.5f); lineTo(20f, 13f)
+        }
+    }
+    val ScrollLock by lazy {
+        icon("ScrollLock") {
+            line(12f, 3.5f, 12f, 14.5f)
+            moveTo(7.5f, 10f); lineTo(12f, 14.5f); lineTo(16.5f, 10f)
+            line(5f, 19.5f, 19f, 19.5f)
+        }
+    }
 }

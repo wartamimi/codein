@@ -30,7 +30,7 @@ data class EditorPreferences(
     val ligatures: Boolean = true,
     val tabSize: Int = 4,
     val softWrap: Boolean = false,
-    val editorSchemeId: String = EditorColorSchemes.CatppuccinMocha.id,
+    val editorSchemeId: String = EditorColorSchemes.Default.id,
     val dynamicColor: Boolean = false,
     val themeMode: AppThemeMode = AppThemeMode.Dark,
     val autoSave: Boolean = true,
@@ -39,11 +39,30 @@ data class EditorPreferences(
 ) {
     val editorScheme: EditorColorScheme get() = EditorColorSchemes.byId(editorSchemeId)
 
+    /**
+     * The theme actually shown. The chosen theme wins when its brightness matches the app theme
+     * mode; otherwise Codein falls back to Obsidian (dark) or Clean Daylight (light), so the editor
+     * and the chrome always agree.
+     */
+    fun resolveScheme(systemDark: Boolean): EditorColorScheme {
+        val wantDark = when (themeMode) {
+            AppThemeMode.Dark -> true
+            AppThemeMode.Light -> false
+            AppThemeMode.System -> systemDark
+        }
+        val chosen = editorScheme
+        return when {
+            chosen.isDark == wantDark -> chosen
+            wantDark -> EditorColorSchemes.Default
+            else -> EditorColorSchemes.DefaultLight
+        }
+    }
+
     companion object {
-        const val MIN_FONT_SIZE = 10f
-        const val MAX_FONT_SIZE = 24f
-        const val MIN_LINE_HEIGHT = 1.1f
-        const val MAX_LINE_HEIGHT = 1.6f
+        const val MIN_FONT_SIZE = 11f
+        const val MAX_FONT_SIZE = 22f
+        const val MIN_LINE_HEIGHT = 1.15f
+        const val MAX_LINE_HEIGHT = 1.55f
         val TAB_SIZES = listOf(2, 4)
     }
 }

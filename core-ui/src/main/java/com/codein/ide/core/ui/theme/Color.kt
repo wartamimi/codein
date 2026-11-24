@@ -3,40 +3,65 @@ package com.codein.ide.core.ui.theme
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
-/** Raw brand palette for the Codein design system. Dark-first slate/charcoal surfaces. */
+/**
+ * Raw brand palette for the Codein Obsidian design system. Depth comes from a calibrated 4-step
+ * surface ladder plus 1dp hairlines, never from drop shadows.
+ */
 object CodeinPalette {
-    val Background = Color(0xFF0F1117)
-    val Panel = Color(0xFF161922)
-    val Card = Color(0xFF1E222E)
-    val CardHover = Color(0xFF252A38)
-    val Hairline = Color(0xFF2A2F3D)
-    val HairlineStrong = Color(0xFF363C4E)
+    /** Tier 0: editor canvas / app base. */
+    val Base = Color(0xFF0B0D12)
+    /** Tier 1: sidebars, top bar, bottom dock. */
+    val Tier1 = Color(0xFF12151E)
+    /** Tier 2: cards, floating search, modals, active pills. */
+    val Tier2 = Color(0xFF191D29)
+    /** Tier 3: hover / pressed / selected highlight. */
+    val Tier3 = Color(0xFF222738)
+    /** Hairline source color; rendered at 30% alpha as `outlineVariant`. */
+    val HairlineSource = Color(0xFF8A93AB)
+
     val TextPrimary = Color(0xFFE6E8EF)
     val TextSecondary = Color(0xFFA3A9BA)
     val TextMuted = Color(0xFF6C7386)
 
     val Accent = Color(0xFF8B7CF6)
-    val AccentContainer = Color(0xFF2E2752)
-    val AccentOn = Color(0xFF0F1117)
+    val AccentOn = Color(0xFF0B0D12)
     val Teal = Color(0xFF2DD4BF)
-    val TealContainer = Color(0xFF113A36)
     val Sky = Color(0xFF7DC4FF)
 
     val Success = Color(0xFF4ADE80)
     val Warning = Color(0xFFFBBF24)
     val Error = Color(0xFFF87171)
-    val ErrorContainer = Color(0xFF3B1A1E)
     val Info = Color(0xFF60A5FA)
 
-    // Light surfaces (GitHub Light companion theme for the app chrome).
-    val LightBackground = Color(0xFFFFFFFF)
-    val LightPanel = Color(0xFFF6F8FA)
-    val LightCard = Color(0xFFEEF1F5)
-    val LightHairline = Color(0xFFD0D7DE)
-    val LightTextPrimary = Color(0xFF1F2328)
-    val LightTextSecondary = Color(0xFF59636E)
-    val LightAccent = Color(0xFF6E56CF)
+    // Legacy aliases kept so older call sites keep compiling against the new tiers.
+    val Background get() = Base
+    val Panel get() = Tier1
+    val Card get() = Tier2
+    val CardHover get() = Tier3
 }
+
+/**
+ * The app-chrome half of a theme: the four surface tiers, the accent and the hairline source. Every
+ * [EditorColorScheme] carries one so switching theme recolors the whole IDE, not only the editor.
+ */
+@Immutable
+data class ChromePalette(
+    val base: Color,
+    val tier1: Color,
+    val tier2: Color,
+    val tier3: Color,
+    val accent: Color,
+    val onAccent: Color,
+    val secondary: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val textMuted: Color,
+    val hairlineSource: Color,
+    val success: Color,
+    val warning: Color,
+    val error: Color,
+    val info: Color,
+)
 
 /** Color-coded file-type badge colors. */
 object FileTypeColors {
@@ -107,12 +132,63 @@ data class EditorColorScheme(
     val error: Color,
     val warning: Color,
     val bracketColors: List<Color>,
+    val chrome: ChromePalette,
 )
 
 object EditorColorSchemes {
+    /** Default theme: the Codein Obsidian surface ladder with a violet accent. */
+    val CodeinObsidian = EditorColorScheme(
+        id = "codein_obsidian",
+        displayName = "Codein Obsidian",
+        isDark = true,
+        background = Color(0xFF0B0D12),
+        foreground = Color(0xFFD7DCE8),
+        gutterBackground = Color(0xFF0B0D12),
+        lineNumber = Color(0xFF4A5164),
+        lineNumberActive = Color(0xFFB9B0FF),
+        currentLine = Color(0xFF12151E),
+        selection = Color(0xFF2B2F48),
+        cursor = Color(0xFFB9B0FF),
+        indentGuide = Color(0xFF1C2030),
+        matchHighlight = Color(0x66FBBF24),
+        keyword = Color(0xFFB79CFF),
+        string = Color(0xFF8BE3A8),
+        number = Color(0xFFFFB077),
+        comment = Color(0xFF5F6780),
+        function = Color(0xFF7DC4FF),
+        type = Color(0xFFFFD580),
+        variable = Color(0xFFD7DCE8),
+        constant = Color(0xFFFFB077),
+        operator = Color(0xFF7FDBCA),
+        annotation = Color(0xFFF5A8D4),
+        tag = Color(0xFF7DC4FF),
+        attribute = Color(0xFFFFD580),
+        punctuation = Color(0xFF8D94A8),
+        error = Color(0xFFF87171),
+        warning = Color(0xFFFBBF24),
+        bracketColors = listOf(Color(0xFFFFD580), Color(0xFFB79CFF), Color(0xFF7DC4FF)),
+        chrome = ChromePalette(
+            base = CodeinPalette.Base,
+            tier1 = CodeinPalette.Tier1,
+            tier2 = CodeinPalette.Tier2,
+            tier3 = CodeinPalette.Tier3,
+            accent = CodeinPalette.Accent,
+            onAccent = CodeinPalette.AccentOn,
+            secondary = CodeinPalette.Teal,
+            textPrimary = CodeinPalette.TextPrimary,
+            textSecondary = CodeinPalette.TextSecondary,
+            textMuted = CodeinPalette.TextMuted,
+            hairlineSource = CodeinPalette.HairlineSource,
+            success = CodeinPalette.Success,
+            warning = CodeinPalette.Warning,
+            error = CodeinPalette.Error,
+            info = CodeinPalette.Info,
+        ),
+    )
+
     val CatppuccinMocha = EditorColorScheme(
         id = "codein_dark",
-        displayName = "Codein Dark (Catppuccin Mocha)",
+        displayName = "Catppuccin Mocha",
         isDark = true,
         background = Color(0xFF1E1E2E),
         foreground = Color(0xFFCDD6F4),
@@ -140,6 +216,23 @@ object EditorColorSchemes {
         error = Color(0xFFF38BA8),
         warning = Color(0xFFF9E2AF),
         bracketColors = listOf(Color(0xFFF9E2AF), Color(0xFFCBA6F7), Color(0xFF89B4FA)),
+        chrome = ChromePalette(
+            base = Color(0xFF1E1E2E),
+            tier1 = Color(0xFF181825),
+            tier2 = Color(0xFF262637),
+            tier3 = Color(0xFF313244),
+            accent = Color(0xFFCBA6F7),
+            onAccent = Color(0xFF11111B),
+            secondary = Color(0xFF94E2D5),
+            textPrimary = Color(0xFFCDD6F4),
+            textSecondary = Color(0xFFA6ADC8),
+            textMuted = Color(0xFF6C7086),
+            hairlineSource = Color(0xFF9399B2),
+            success = Color(0xFFA6E3A1),
+            warning = Color(0xFFF9E2AF),
+            error = Color(0xFFF38BA8),
+            info = Color(0xFF89B4FA),
+        ),
     )
 
     val OneDarkPro = EditorColorScheme(
@@ -172,6 +265,23 @@ object EditorColorSchemes {
         error = Color(0xFFE06C75),
         warning = Color(0xFFE5C07B),
         bracketColors = listOf(Color(0xFFD19A66), Color(0xFFC678DD), Color(0xFF56B6C2)),
+        chrome = ChromePalette(
+            base = Color(0xFF282C34),
+            tier1 = Color(0xFF21252B),
+            tier2 = Color(0xFF2C313C),
+            tier3 = Color(0xFF3A3F4B),
+            accent = Color(0xFF61AFEF),
+            onAccent = Color(0xFF1B1E24),
+            secondary = Color(0xFF56B6C2),
+            textPrimary = Color(0xFFD7DAE0),
+            textSecondary = Color(0xFFABB2BF),
+            textMuted = Color(0xFF7F848E),
+            hairlineSource = Color(0xFF8B92A0),
+            success = Color(0xFF98C379),
+            warning = Color(0xFFE5C07B),
+            error = Color(0xFFE06C75),
+            info = Color(0xFF61AFEF),
+        ),
     )
 
     val TokyoNight = EditorColorScheme(
@@ -204,6 +314,23 @@ object EditorColorSchemes {
         error = Color(0xFFF7768E),
         warning = Color(0xFFE0AF68),
         bracketColors = listOf(Color(0xFFE0AF68), Color(0xFFBB9AF7), Color(0xFF7DCFFF)),
+        chrome = ChromePalette(
+            base = Color(0xFF1A1B26),
+            tier1 = Color(0xFF16161E),
+            tier2 = Color(0xFF1F2335),
+            tier3 = Color(0xFF292E42),
+            accent = Color(0xFF7AA2F7),
+            onAccent = Color(0xFF15161E),
+            secondary = Color(0xFF2AC3DE),
+            textPrimary = Color(0xFFC0CAF5),
+            textSecondary = Color(0xFFA9B1D6),
+            textMuted = Color(0xFF565F89),
+            hairlineSource = Color(0xFF737AA2),
+            success = Color(0xFF9ECE6A),
+            warning = Color(0xFFE0AF68),
+            error = Color(0xFFF7768E),
+            info = Color(0xFF7DCFFF),
+        ),
     )
 
     val Dracula = EditorColorScheme(
@@ -236,11 +363,29 @@ object EditorColorSchemes {
         error = Color(0xFFFF5555),
         warning = Color(0xFFFFB86C),
         bracketColors = listOf(Color(0xFFF1FA8C), Color(0xFFFF79C6), Color(0xFF8BE9FD)),
+        chrome = ChromePalette(
+            base = Color(0xFF282A36),
+            tier1 = Color(0xFF21222C),
+            tier2 = Color(0xFF303241),
+            tier3 = Color(0xFF3B3D4E),
+            accent = Color(0xFFBD93F9),
+            onAccent = Color(0xFF191A21),
+            secondary = Color(0xFF8BE9FD),
+            textPrimary = Color(0xFFF8F8F2),
+            textSecondary = Color(0xFFC6C8D1),
+            textMuted = Color(0xFF6272A4),
+            hairlineSource = Color(0xFF8C93B5),
+            success = Color(0xFF50FA7B),
+            warning = Color(0xFFFFB86C),
+            error = Color(0xFFFF5555),
+            info = Color(0xFF8BE9FD),
+        ),
     )
 
-    val GitHubLight = EditorColorScheme(
+    /** Kept under its original id so saved preferences keep working. */
+    val CleanDaylight = EditorColorScheme(
         id = "github_light",
-        displayName = "GitHub Light",
+        displayName = "Clean Daylight",
         isDark = false,
         background = Color(0xFFFFFFFF),
         foreground = Color(0xFF1F2328),
@@ -268,9 +413,29 @@ object EditorColorSchemes {
         error = Color(0xFFCF222E),
         warning = Color(0xFF9A6700),
         bracketColors = listOf(Color(0xFF0550AE), Color(0xFF8250DF), Color(0xFF116329)),
+        chrome = ChromePalette(
+            base = Color(0xFFFFFFFF),
+            tier1 = Color(0xFFF6F8FA),
+            tier2 = Color(0xFFEEF1F5),
+            tier3 = Color(0xFFE4E8ED),
+            accent = Color(0xFF6E56CF),
+            onAccent = Color(0xFFFFFFFF),
+            secondary = Color(0xFF0F766E),
+            textPrimary = Color(0xFF1F2328),
+            textSecondary = Color(0xFF59636E),
+            textMuted = Color(0xFF8C959F),
+            hairlineSource = Color(0xFF6E7781),
+            success = Color(0xFF1A7F37),
+            warning = Color(0xFF9A6700),
+            error = Color(0xFFCF222E),
+            info = Color(0xFF0969DA),
+        ),
     )
 
-    val all: List<EditorColorScheme> = listOf(CatppuccinMocha, OneDarkPro, TokyoNight, Dracula, GitHubLight)
+    val all: List<EditorColorScheme> = listOf(CodeinObsidian, CatppuccinMocha, OneDarkPro, TokyoNight, Dracula, CleanDaylight)
 
-    fun byId(id: String): EditorColorScheme = all.firstOrNull { it.id == id } ?: CatppuccinMocha
+    val Default: EditorColorScheme get() = CodeinObsidian
+    val DefaultLight: EditorColorScheme get() = CleanDaylight
+
+    fun byId(id: String): EditorColorScheme = all.firstOrNull { it.id == id } ?: CodeinObsidian
 }

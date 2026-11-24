@@ -116,7 +116,7 @@ fun FileTypeBadge(fileName: String, modifier: Modifier = Modifier, size: Dp = 18
 /** A folder glyph paired with an animated expand/collapse chevron. */
 @Composable
 fun FolderChevron(expanded: Boolean, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    val rotation by animateFloatAsState(targetValue = if (expanded) 90f else 0f, animationSpec = tween(180), label = "chevron")
+    val rotation by animateFloatAsState(targetValue = if (expanded) 90f else 0f, animationSpec = com.codein.ide.core.ui.theme.Motion.spatial(), label = "chevron")
     Icon(
         imageVector = CodeinIcons.ChevronRight,
         contentDescription = if (expanded) "Collapse" else "Expand",

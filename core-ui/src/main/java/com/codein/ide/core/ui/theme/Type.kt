@@ -59,8 +59,8 @@ val CodeinTypography = Typography(
     bodyMedium = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 19.sp, letterSpacing = tight),
     bodySmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = tight),
     labelLarge = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = tight, fontFeatureSettings = TabularNumbers),
-    labelMedium = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = tight, fontFeatureSettings = TabularNumbers),
-    labelSmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.em, fontFeatureSettings = TabularNumbers),
+    labelMedium = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.em, fontFeatureSettings = TabularNumbers),
+    labelSmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 0.01.em, fontFeatureSettings = TabularNumbers),
 )
 
 /** Monospace text style for code shown outside the editor (diffs, logs, search previews). */
@@ -69,4 +69,16 @@ fun codeTextStyle(font: CodingFont, sizeSp: Float, ligatures: Boolean): TextStyl
     fontSize = sizeSp.sp,
     lineHeight = (sizeSp * 1.45f).sp,
     fontFeatureSettings = if (ligatures && font.supportsLigatures) "liga 1, calt 1, tnum" else "liga 0, calt 0, tnum",
+)
+
+/**
+ * Monospace style for live numbers outside the editor (Ln:Col, build timers, file sizes, Logcat
+ * timestamps). Always tabular and ligature-free so values never jitter while they update.
+ */
+fun metricsTextStyle(font: CodingFont, sizeSp: Float = 11f): TextStyle = TextStyle(
+    fontFamily = font.family,
+    fontWeight = FontWeight.Medium,
+    fontSize = sizeSp.sp,
+    lineHeight = (sizeSp * 1.4f).sp,
+    fontFeatureSettings = "tnum, liga 0, calt 0",
 )
