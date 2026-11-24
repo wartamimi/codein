@@ -63,6 +63,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
@@ -332,18 +333,24 @@ fun WorkspaceScreen(
             onCloseProject = onCloseProject,
         )
         val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        // Text fields inside the dock (AI prompt, Logcat filter) open the keyboard too. Swapping
+        // the dock for the extra-keys bar while one of them has focus would remove the field,
+        // drop focus and immediately close the keyboard again, so only swap for the editor.
+        var dockHasFocus by remember { mutableStateOf(false) }
         val bottom: @Composable (Dp) -> Unit = { available ->
-            if (imeVisible && state.activeFile != null) {
+            if (imeVisible && state.activeFile != null && !dockHasFocus) {
                 ExtraKeysBar({ onIntent(WorkspaceIntent.Key(it)) }, canUndo, canRedo, state.errorCount > 0, prefs.hapticExtraKeys)
             } else {
-                DeveloperDock(
-                    state = state,
-                    tabs = consoleTabs,
-                    lastTab = if (lastConsoleTab in consoleTabs) lastConsoleTab else DockTab.Build,
-                    available = available,
-                    onIntent = onIntent,
-                    content = dockContent,
-                )
+                Box(Modifier.onFocusChanged { dockHasFocus = it.hasFocus }) {
+                    DeveloperDock(
+                        state = state,
+                        tabs = consoleTabs,
+                        lastTab = if (lastConsoleTab in consoleTabs) lastConsoleTab else DockTab.Build,
+                        available = available,
+                        onIntent = onIntent,
+                        content = dockContent,
+                    )
+                }
             }
         }
 
