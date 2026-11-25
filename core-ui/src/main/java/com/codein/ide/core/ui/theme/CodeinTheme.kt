@@ -2,6 +2,7 @@ package com.codein.ide.core.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -17,11 +18,10 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.codein.ide.core.ui.prefs.EditorPreferences
 
 /** Hairlines are the hairline source color at 30% alpha: the only depth cue besides surface tiers. */
@@ -61,8 +61,8 @@ val LocalEditorPreferences = staticCompositionLocalOf { EditorPreferences() }
  * controls people press (buttons, chips, segmented tabs, key pills) are full pills.
  */
 object CodeinShape {
-    val Surface: Shape = RectangleShape
-    val Control: Shape = RoundedCornerShape(percent = 50)
+    val Surface: CornerBasedShape = RoundedCornerShape(0.dp)
+    val Control: CornerBasedShape = RoundedCornerShape(percent = 50)
 }
 
 /**
