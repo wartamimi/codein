@@ -59,8 +59,17 @@ private val TargetSdkChoices = listOf(33, 34, 35)
 
 /** Three-step project creation wizard: template, details, SDK levels. */
 @Composable
-fun NewProjectWizard(onBack: () -> Unit, onCreated: (String) -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
+fun NewProjectWizard(
+    onBack: () -> Unit,
+    onCreated: (String) -> Unit,
+    viewModel: HomeViewModel = hiltViewModel(),
+    aiViewModel: AiTemplateViewModel = hiltViewModel(),
+) {
     var step by rememberSaveable { mutableIntStateOf(0) }
+    var aiMode by rememberSaveable { mutableStateOf(false) }
+    var aiCompose by rememberSaveable { mutableStateOf(true) }
+    var aiDescription by rememberSaveable { mutableStateOf("") }
+    val aiState by aiViewModel.state.collectAsStateWithLifecycle()
     var template by rememberSaveable { mutableStateOf(ProjectTemplate.ComposeMaterial3) }
     var name by rememberSaveable { mutableStateOf("My Application") }
     var packageName by rememberSaveable { mutableStateOf("com.example.myapplication") }
@@ -82,7 +91,12 @@ fun NewProjectWizard(onBack: () -> Unit, onCreated: (String) -> Unit, viewModel:
 
     val nameError = ProjectSpec.validateName(name)
     val packageError = ProjectSpec.validatePackage(packageName)
-    val effectiveLanguage = if (template.supportsJava) language else ProjectLanguage.Kotlin
+    val effectiveLanguage = when {
+        aiMode -> if (aiCompose) ProjectLanguage.Kotlin else language
+        template.supportsJava -> language
+        else -> ProjectLanguage.Kotlin
+    }
+    val aiSpec = aiViewModel.baseSpec(name.trim(), packageName.trim(), language, aiCompose)
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -103,11 +117,12 @@ fun NewProjectWizard(onBack: () -> Unit, onCreated: (String) -> Unit, viewModel:
                             ProjectTemplate.entries.chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                                     pair.forEach { t ->
-                                        TemplateCard(t, selected = t == template, modifier = Modifier.weight(1f)) { template = t }
+                                        TemplateCard(t, selected = !aiMode && t == template, modifier = Modifier.weight(1f)) { template = t; aiMode = false }
                                     }
                                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
                             }
+                            AiTemplateCard(selected = aiMode) { aiMode = true }
                         }
                         1 -> {
                             Text("Project details", style = MaterialTheme.typography.titleMedium)
@@ -132,16 +147,23 @@ fun NewProjectWizard(onBack: () -> Unit, onCreated: (String) -> Unit, viewModel:
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                            if (aiMode) {
+                                Text("UI toolkit", style = MaterialTheme.typography.labelLarge)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    PillChip("Jetpack Compose", selected = aiCompose, onClick = { aiCompose = true })
+                                    PillChip("Views (XML)", selected = !aiCompose, onClick = { aiCompose = false })
+                                }
+                            }
                             Text("Language", style = MaterialTheme.typography.labelLarge)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ProjectLanguage.entries.forEach { l ->
-                                    val enabled = template.supportsJava || l == ProjectLanguage.Kotlin
+                                    val enabled = if (aiMode) !aiCompose || l == ProjectLanguage.Kotlin else template.supportsJava || l == ProjectLanguage.Kotlin
                                     PillChip(l.displayName, selected = effectiveLanguage == l, onClick = if (enabled) ({ language = l }) else null)
                                 }
                             }
                             Text(
                                 if (effectiveLanguage == ProjectLanguage.Kotlin) {
-                                    "Kotlin sources compile on-device only after importing the Kotlin compiler in Settings → Toolchain. Java projects build with the bundled ECJ compiler."
+                                    "Kotlin builds need the Kotlin compiler, downloaded once in Settings → Toolchain. The first Kotlin build also prepares the compiler, which takes a few minutes."
                                 } else {
                                     "Java sources compile with the bundled Eclipse compiler (Java 8 language level)."
                                 },
@@ -149,7 +171,14 @@ fun NewProjectWizard(onBack: () -> Unit, onCreated: (String) -> Unit, viewModel:
                                 color = CodeinTheme.colors.textMuted,
                             )
                         }
-                        else -> {
+                        else -> if (aiMode) {
+                            AiTemplateStep(
+                                description = aiDescription,
+                                onDescriptionChange = { aiDescription = it },
+                                state = aiState,
+                                summary = "${if (aiCompose) "Compose" else "Views"} · ${effectiveLanguage.displayName} · $name ($packageName)",
+                            )
+                        } else {
                             Text("SDK levels", style = MaterialTheme.typography.titleMedium)
                             Text("Minimum SDK · API $minSdk", style = MaterialTheme.typography.labelLarge)
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -178,6 +207,20 @@ fun NewProjectWizard(onBack: () -> Unit, onCreated: (String) -> Unit, viewModel:
             }
             if (step < 2) {
                 Button(onClick = { step++ }, enabled = step == 0 || (nameError == null && packageError == null)) { Text("Next") }
+            } else if (aiMode) {
+                when (aiState) {
+                    is AiTemplateState.Generating -> OutlinedButton(onClick = aiViewModel::cancel) { Text("Stop") }
+                    is AiTemplateState.Ready -> {
+                        OutlinedButton(onClick = { aiViewModel.generate(aiSpec, aiDescription) }) { Text("Regenerate") }
+                        Spacer(Modifier.width(8.dp))
+                        Button(onClick = { aiViewModel.create(aiSpec, onCreated) }, enabled = nameError == null && packageError == null) { Text("Create project") }
+                    }
+                    AiTemplateState.Creating -> Button(onClick = {}, enabled = false) { Text("Creating…") }
+                    else -> Button(
+                        onClick = { aiViewModel.generate(aiSpec, aiDescription) },
+                        enabled = aiDescription.isNotBlank() && nameError == null && packageError == null,
+                    ) { Text("Generate") }
+                }
             } else {
                 Button(
                     onClick = {

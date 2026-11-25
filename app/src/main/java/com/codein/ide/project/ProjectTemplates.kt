@@ -52,6 +52,16 @@ object ProjectTemplates {
 
     private const val D = "$"
 
+    /** Adds `implementation("…")` lines to the `dependencies` block of a module build script. */
+    fun withDependencies(buildScript: String, dependencies: List<String>): String {
+        val marker = "dependencies {\n"
+        val index = buildScript.lastIndexOf(marker)
+        val existing = buildScript.substring(maxOf(index, 0))
+        val lines = dependencies.filter { d -> !existing.contains("\"$d\"") }.joinToString("") { "    implementation(\"$it\")\n" }
+        if (lines.isEmpty()) return buildScript
+        return if (index < 0) buildScript + "\ndependencies {\n$lines}\n" else buildScript.substring(0, index + marker.length) + lines + buildScript.substring(index + marker.length)
+    }
+
     fun generate(spec: ProjectSpec): Map<String, String> {
         val files = LinkedHashMap<String, String>()
         val lang = spec.effectiveLanguage
