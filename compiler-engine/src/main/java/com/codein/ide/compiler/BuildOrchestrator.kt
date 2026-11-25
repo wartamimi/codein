@@ -21,6 +21,8 @@ import com.codein.ide.compiler.model.DiagnosticSource
 import com.codein.ide.compiler.model.LogLevel
 import com.codein.ide.compiler.model.Severity
 import com.codein.ide.compiler.model.StepStatus
+import com.codein.ide.compiler.cache.CachedArtifact
+import com.codein.ide.compiler.cache.ResolutionCache
 import com.codein.ide.compiler.packaging.ApkPackager
 import com.codein.ide.compiler.packaging.PackagingInputs
 import com.codein.ide.compiler.sdk.BuildToolchain
@@ -227,43 +229,33 @@ class BuildOrchestrator @Inject constructor(
             }
         }
 
-        // BOM-managed versions.
-        val managed = mutableMapOf<String, String>()
-        for (platform in allDeps.filterIsInstance<GradleDependency.Platform>()) {
-            val coordinate = runCatching { MavenCoordinate.parse(platform.coordinate) }.getOrNull() ?: continue
-            log(step, "Importing BOM $coordinate")
-            mavenResolver.effectivePom(coordinate, MavenRepository.Defaults)?.first?.managedVersions?.let(managed::putAll)
-        }
-
         val mavenDeps = allDeps.filterIsInstance<GradleDependency.Maven>().filter { it.configuration in variantConfigs }
         val compileOnly = mavenDeps.filter { it.configuration == "compileOnly" }.map { "${it.group}:${it.artifact}" }.toSet()
-        val roots = mavenDeps.map { d ->
-            val version = if (d.version == "+" || d.version.isBlank()) managed["${d.group}:${d.artifact}"] ?: d.version else d.version
-            MavenCoordinate(d.group, d.artifact, version, d.classifier, d.extension)
-        }.distinctBy { it.groupArtifact }
-        if (roots.isEmpty()) {
+        val platforms = allDeps.filterIsInstance<GradleDependency.Platform>()
+        if (mavenDeps.isEmpty()) {
             log(step, "No Maven dependencies declared")
             return
         }
-        log(step, "Resolving ${roots.size} declared dependencies")
         val repositories = repositoriesFor(settings.repositories)
-        val events = mutableListOf<ResolveEvent>()
-        val result = mavenResolver.resolve(roots, repositories) { events += it }
-        for (event in events) {
-            when (event) {
-                is ResolveEvent.Downloaded -> log(step, "Downloaded ${event.coordinate} from ${event.repository} (${event.bytes / 1024} KB)")
-                is ResolveEvent.VersionConflict -> log(step, "Conflict ${event.groupArtifact}: ${event.versions.joinToString()} → ${event.selected}", LogLevel.Warning)
-                is ResolveEvent.Failed -> log(step, "Failed ${event.coordinate}: ${event.reason}", LogLevel.Error)
-                else -> Unit
+
+        // Unchanged dependencies since the last build: reuse its resolution and skip the POM walk.
+        val cache = ResolutionCache(File(toolchain.workRoot, "resolve-cache"))
+        val cacheKey = cache.key(
+            declared = mavenDeps.map { d -> MavenCoordinate(d.group, d.artifact, d.version.ifBlank { "managed-by-bom" }, d.classifier, d.extension).toString() },
+            platforms = platforms.map { it.coordinate },
+            repositories = repositories.map { it.baseUrl },
+        )
+        val cached = cacheKey?.let(cache::load)
+        val artifacts: List<CachedArtifact> = if (cached != null) {
+            log(step, "Dependencies unchanged since the last build: reusing ${cached.size} resolved artifacts")
+            cached
+        } else {
+            resolveWithMaven(mavenDeps, platforms, repositories).also { resolved ->
+                if (cacheKey != null) runCatching { cache.save(cacheKey, resolved) }
             }
         }
-        if (result.failures.isNotEmpty()) {
-            throw BuildStepException(step, result.failures.map {
-                CompilerDiagnostic(DiagnosticSource.Maven, Severity.Error, "Could not resolve ${it.coordinate}: ${it.reason}")
-            })
-        }
         val explodedRoot = File(toolchain.workRoot, "exploded-aar")
-        for (artifact in result.artifacts) {
+        for (artifact in artifacts) {
             coroutineContext.ensureActive()
             val file = artifact.file ?: continue
             val runtime = artifact.coordinate.groupArtifact !in compileOnly
@@ -281,7 +273,45 @@ class BuildOrchestrator @Inject constructor(
                 ArtifactType.PomOnly -> Unit
             }
         }
-        log(step, "Resolved ${result.artifacts.size} artifacts (${ctx.aars.size} AARs, ${ctx.compileJars.size} jars)")
+        log(step, "Resolved ${artifacts.size} artifacts (${ctx.aars.size} AARs, ${ctx.compileJars.size} jars)")
+    }
+
+    /** Full Maven resolution: BOM import, transitive POM walk, downloads. */
+    private suspend fun ProducerScope<BuildEvent>.resolveWithMaven(
+        mavenDeps: List<GradleDependency.Maven>,
+        platforms: List<GradleDependency.Platform>,
+        repositories: List<MavenRepository>,
+    ): List<CachedArtifact> {
+        val step = BuildStep.MavenResolve
+        // BOM-managed versions.
+        val managed = mutableMapOf<String, String>()
+        for (platform in platforms) {
+            val coordinate = runCatching { MavenCoordinate.parse(platform.coordinate) }.getOrNull() ?: continue
+            log(step, "Importing BOM $coordinate")
+            mavenResolver.effectivePom(coordinate, MavenRepository.Defaults)?.first?.managedVersions?.let(managed::putAll)
+        }
+
+        val roots = mavenDeps.map { d ->
+            val version = if (d.version == "+" || d.version.isBlank()) managed["${d.group}:${d.artifact}"] ?: d.version else d.version
+            MavenCoordinate(d.group, d.artifact, version, d.classifier, d.extension)
+        }.distinctBy { it.groupArtifact }
+        log(step, "Resolving ${roots.size} declared dependencies")
+        val events = mutableListOf<ResolveEvent>()
+        val result = mavenResolver.resolve(roots, repositories) { events += it }
+        for (event in events) {
+            when (event) {
+                is ResolveEvent.Downloaded -> log(step, "Downloaded ${event.coordinate} from ${event.repository} (${event.bytes / 1024} KB)")
+                is ResolveEvent.VersionConflict -> log(step, "Conflict ${event.groupArtifact}: ${event.versions.joinToString()} → ${event.selected}", LogLevel.Warning)
+                is ResolveEvent.Failed -> log(step, "Failed ${event.coordinate}: ${event.reason}", LogLevel.Error)
+                else -> Unit
+            }
+        }
+        if (result.failures.isNotEmpty()) {
+            throw BuildStepException(step, result.failures.map {
+                CompilerDiagnostic(DiagnosticSource.Maven, Severity.Error, "Could not resolve ${it.coordinate}: ${it.reason}")
+            })
+        }
+        return result.artifacts.map { CachedArtifact(it.coordinate, it.type, it.file) }
     }
 
     private fun repositoriesFor(declared: List<String>): List<MavenRepository> {
