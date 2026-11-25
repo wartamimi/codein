@@ -1,5 +1,6 @@
 package com.codein.ide.logcat
 
+import com.codein.ide.core.ui.i18n.tr
 import com.codein.ide.core.ui.theme.metricsTextStyle
 import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.core.ui.components.CompactTextField
@@ -89,7 +90,7 @@ fun LogcatPanel(
                 CompactTextField(
                     value = state.filter,
                     onValueChange = { onIntent(LogcatIntent.Filter(it)) },
-                    placeholder = "Regex filter on tag or message",
+                    placeholder = tr("Regex filter on tag or message"),
                     leadingIcon = CodeinIcons.Filter,
                     isError = state.filterError != null,
                     textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 12f, false),
@@ -97,7 +98,7 @@ fun LogcatPanel(
                 )
                 ToolbarIconButton(if (state.paused) CodeinIcons.Play else CodeinIcons.Pause, if (state.paused) "Resume" else "Pause", size = 28.dp, active = state.paused) { onIntent(LogcatIntent.TogglePause) }
                 ToolbarIconButton(CodeinIcons.ScrollLock, if (state.autoScroll) "Auto-scroll on" else "Auto-scroll off", size = 28.dp, active = state.autoScroll) { onIntent(LogcatIntent.AutoScroll(!state.autoScroll)) }
-                ToolbarIconButton(CodeinIcons.Trash, "Clear", size = 28.dp) { onIntent(LogcatIntent.Clear) }
+                ToolbarIconButton(CodeinIcons.Trash, tr("Clear"), size = 28.dp) { onIntent(LogcatIntent.Clear) }
             }
             state.filterError?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs))
@@ -185,7 +186,7 @@ private fun PidChip(state: LogcatState, onIntent: (LogcatIntent) -> Unit) {
             onClick = { open = true },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("All processes") }, onClick = { open = false; onIntent(LogcatIntent.LockPid(null)) })
+            DropdownMenuItem(text = { Text(tr("All processes")) }, onClick = { open = false; onIntent(LogcatIntent.LockPid(null)) })
             DropdownMenuItem(text = { Text("This app (${android.os.Process.myPid()})") }, onClick = { open = false; onIntent(LogcatIntent.LockPid(android.os.Process.myPid())) })
             state.knownPids.forEach { pid ->
                 DropdownMenuItem(text = { Text("PID $pid") }, onClick = { open = false; onIntent(LogcatIntent.LockPid(pid)) })
@@ -210,8 +211,7 @@ private fun ReadLogsBanner(command: String) {
             .padding(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Showing only Codein's logs. Grant READ_LOGS once to see your installed app's logs.",
+            Text(tr("Showing only Codein's logs. Grant READ_LOGS once to see your installed app's logs."),
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f),
             )
@@ -231,7 +231,7 @@ private fun ReadLogsBanner(command: String) {
                     style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 11.5f, false),
                     modifier = Modifier.weight(1f).padding(vertical = 6.dp),
                 )
-                ToolbarIconButton(CodeinIcons.Copy, "Copy command", size = 32.dp) { clipboard.setText(AnnotatedString(command)) }
+                ToolbarIconButton(CodeinIcons.Copy, tr("Copy command"), size = 32.dp) { clipboard.setText(AnnotatedString(command)) }
             }
             Text(
                 "3. Force-stop and reopen Codein. The grant survives app updates but not reinstalling.",

@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.i18n.tr
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,12 +49,12 @@ fun LocalHistoryDialog(history: FileHistoryUi, onIntent: (WorkspaceIntent) -> Un
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 PanelHeader("Local history · ${history.relativePath.substringAfterLast('/')}", icon = CodeinIcons.History) {
-                    ToolbarIconButton(CodeinIcons.Close, "Close", size = 32.dp) { onIntent(WorkspaceIntent.CloseHistory) }
+                    ToolbarIconButton(CodeinIcons.Close, tr("Close"), size = 32.dp) { onIntent(WorkspaceIntent.CloseHistory) }
                 }
                 if (history.versions.isEmpty()) {
                     EmptyState(
                         icon = CodeinIcons.History,
-                        title = "No earlier versions yet",
+                        title = tr("No earlier versions yet"),
                         message = "Codein keeps the previous text each time it saves or replaces this file (up to ${LocalHistory.MAX_VERSIONS} versions).",
                         modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
                     )
@@ -85,8 +86,7 @@ fun LocalHistoryDialog(history: FileHistoryUi, onIntent: (WorkspaceIntent) -> Un
                     }
                 }
                 Hairline()
-                Text(
-                    "Changes restoring this version would make",
+                Text(tr("Changes restoring this version would make"),
                     style = MaterialTheme.typography.labelMedium,
                     color = CodeinTheme.colors.textMuted,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -96,9 +96,9 @@ fun LocalHistoryDialog(history: FileHistoryUi, onIntent: (WorkspaceIntent) -> Un
                 }
                 Hairline()
                 Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    TextButton(onClick = { onIntent(WorkspaceIntent.CloseHistory) }) { Text("Close") }
+                    TextButton(onClick = { onIntent(WorkspaceIntent.CloseHistory) }) { Text(tr("Close")) }
                     Button(onClick = { history.selected?.let { onIntent(WorkspaceIntent.RestoreHistoryVersion(it)) } }, enabled = history.selected != null) {
-                        Text("Restore this version")
+                        Text(tr("Restore this version"))
                     }
                 }
             }

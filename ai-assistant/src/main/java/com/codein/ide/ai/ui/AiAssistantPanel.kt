@@ -1,5 +1,6 @@
 package com.codein.ide.ai.ui
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.semantics
@@ -95,12 +96,12 @@ fun AiAssistantPanel(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
-        PanelHeader("Codein AI", icon = CodeinIcons.Sparkle) {
+        PanelHeader(tr("Codein AI"), icon = CodeinIcons.Sparkle) {
             if (state.modelLabel.isNotEmpty()) {
                 Text(state.modelLabel, style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted, maxLines = 1, modifier = Modifier.widthIn(max = 140.dp))
             }
-            ToolbarIconButton(CodeinIcons.Trash, "Clear conversation", size = 32.dp, enabled = state.messages.isNotEmpty()) { onIntent(AiIntent.Clear) }
-            ToolbarIconButton(CodeinIcons.Settings, "AI provider settings", size = 32.dp, onClick = onOpenSettings)
+            ToolbarIconButton(CodeinIcons.Trash, tr("Clear conversation"), size = 32.dp, enabled = state.messages.isNotEmpty()) { onIntent(AiIntent.Clear) }
+            ToolbarIconButton(CodeinIcons.Settings, tr("AI provider settings"), size = 32.dp, onClick = onOpenSettings)
         }
         Hairline()
         val listState = rememberLazyListState()
@@ -120,8 +121,8 @@ fun AiAssistantPanel(
                     },
                     modifier = Modifier.align(Alignment.Center),
                 ) {
-                    if (!state.configured) TextButton(onClick = onOpenSettings) { Text("Open AI settings") }
-                    else if (state.hasBuildError) TextButton(onClick = { onIntent(AiIntent.ExplainAndFix) }) { Text("Explain & fix build error") }
+                    if (!state.configured) TextButton(onClick = onOpenSettings) { Text(tr("Open AI settings")) }
+                    else if (state.hasBuildError) TextButton(onClick = { onIntent(AiIntent.ExplainAndFix) }) { Text(tr("Explain & fix build error")) }
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -246,7 +247,7 @@ private fun AssistantMessage(message: AiMessage, onApplyDiff: (FilePatch) -> Uni
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(CodeinIcons.Sparkle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Codein AI", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Text(tr("Codein AI"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             if (message.streaming) {
                 Spacer(Modifier.width(8.dp))
                 TypingDots()
@@ -284,7 +285,7 @@ private fun AssistantMessage(message: AiMessage, onApplyDiff: (FilePatch) -> Uni
                 Icon(CodeinIcons.AlertCircle, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                TextButton(onClick = onRetry) { Text("Retry") }
+                TextButton(onClick = onRetry) { Text(tr("Retry")) }
             }
         }
     }
@@ -352,8 +353,8 @@ private fun CodeCard(block: MdBlock.Code, onInsertCode: (String) -> Unit) {
             Icon(CodeinIcons.Code, null, tint = CodeinTheme.colors.textMuted, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
             Text(block.language.ifEmpty { "code" }, style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted, modifier = Modifier.weight(1f))
-            ToolbarIconButton(CodeinIcons.Copy, "Copy code", size = 30.dp) { clipboard.setText(AnnotatedString(block.code)) }
-            ToolbarIconButton(CodeinIcons.ArrowDown, "Insert at cursor", size = 30.dp, enabled = block.complete) { onInsertCode(block.code) }
+            ToolbarIconButton(CodeinIcons.Copy, tr("Copy code"), size = 30.dp) { clipboard.setText(AnnotatedString(block.code)) }
+            ToolbarIconButton(CodeinIcons.ArrowDown, tr("Insert at cursor"), size = 30.dp, enabled = block.complete) { onInsertCode(block.code) }
         }
         SelectionContainer {
             Text(
@@ -442,7 +443,7 @@ private fun DiffCard(block: MdBlock.Diff, onApplyDiff: (FilePatch) -> Unit) {
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.xs), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                if (!block.complete) Text("Streaming…", style = MaterialTheme.typography.labelMedium, color = CodeinTheme.colors.textMuted, modifier = Modifier.weight(1f))
+                if (!block.complete) Text(tr("Streaming…"), style = MaterialTheme.typography.labelMedium, color = CodeinTheme.colors.textMuted, modifier = Modifier.weight(1f))
                 val label = if (chosen.size == patch.hunks.size) "Apply to Editor" else "Apply ${chosen.size} of ${patch.hunks.size} changes"
                 val ready = block.complete && chosen.isNotEmpty()
                 PillChip(label, icon = CodeinIcons.Check, selected = ready, onClick = if (ready) ({ onApplyDiff(patch.copy(hunks = chosen)) }) else null)

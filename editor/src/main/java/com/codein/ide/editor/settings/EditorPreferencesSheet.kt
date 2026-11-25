@@ -1,5 +1,6 @@
 package com.codein.ide.editor.settings
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -99,7 +100,7 @@ fun EditorPreferencesSheet(
     ) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
-                Text("Editor appearance", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(tr("Editor appearance"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Text(
                     "${preferences.codingFont.displayName} · ${preferences.fontSizeSp.roundToInt()}sp",
                     style = metricsTextStyle(preferences.codingFont, 11f),
@@ -153,7 +154,7 @@ fun EditorPreferencesSheet(
                 }
 
                 StudioSectionCard("Layout", icon = CodeinIcons.Wrap) {
-                    Text("Tab width", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(tr("Tab width"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     SegmentedTabs(
                         items = EditorPreferences.TAB_SIZES,
                         selected = preferences.tabSize,
@@ -164,7 +165,7 @@ fun EditorPreferencesSheet(
                     ToggleRow("Indent guides", null, preferences.showIndentGuides) { onChange(PreferenceChange.IndentGuides(it)) }
                 }
 
-                StudioSectionCard("Color theme", icon = CodeinIcons.Palette, subtitle = "Recolors the editor and the whole IDE") {
+                StudioSectionCard("Color theme", icon = CodeinIcons.Palette, subtitle = tr("Recolors the editor and the whole IDE")) {
                     EditorColorSchemes.all.chunked(2).forEach { pair ->
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             pair.forEach { scheme ->
@@ -173,7 +174,7 @@ fun EditorPreferencesSheet(
                             if (pair.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
-                    Text("App theme mode", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(tr("App theme mode"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     SegmentedTabs(
                         items = AppThemeMode.entries.toList(),
                         selected = preferences.themeMode,

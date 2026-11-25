@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
@@ -105,10 +106,10 @@ fun FileExplorer(
     val activeBg = CodeinTheme.colors.tier3
     Column(modifier.fillMaxSize()) {
         PanelHeader(projectName.ifEmpty { "Explorer" }, icon = CodeinIcons.FolderOpen) {
-            ToolbarIconButton(CodeinIcons.FilePlus, "New file", size = 28.dp) { dialog = ExplorerDialog.NewFile("") }
-            ToolbarIconButton(CodeinIcons.FolderPlus, "New folder", size = 28.dp) { dialog = ExplorerDialog.NewFolder("") }
-            ToolbarIconButton(CodeinIcons.CollapseAll, "Collapse all", size = 28.dp) { onIntent(WorkspaceIntent.CollapseAll) }
-            ToolbarIconButton(CodeinIcons.Refresh, "Refresh", size = 28.dp) { onIntent(WorkspaceIntent.RefreshTree) }
+            ToolbarIconButton(CodeinIcons.FilePlus, tr("New file"), size = 28.dp) { dialog = ExplorerDialog.NewFile("") }
+            ToolbarIconButton(CodeinIcons.FolderPlus, tr("New folder"), size = 28.dp) { dialog = ExplorerDialog.NewFolder("") }
+            ToolbarIconButton(CodeinIcons.CollapseAll, tr("Collapse all"), size = 28.dp) { onIntent(WorkspaceIntent.CollapseAll) }
+            ToolbarIconButton(CodeinIcons.Refresh, tr("Refresh"), size = 28.dp) { onIntent(WorkspaceIntent.RefreshTree) }
         }
         HairlineDivider()
         if (rows.isEmpty()) {
@@ -186,8 +187,8 @@ fun FileExplorer(
                     }
                     DropdownMenu(expanded = menuFor == row.relativePath, onDismissRequest = { menuFor = null }, containerColor = CodeinTheme.colors.tier2) {
                         val parent = if (row.isDirectory) row.relativePath else row.relativePath.substringBeforeLast('/', "")
-                        DropdownMenuItem(text = { Text("New file") }, leadingIcon = { Icon(CodeinIcons.FilePlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFile(parent) })
-                        DropdownMenuItem(text = { Text("New folder") }, leadingIcon = { Icon(CodeinIcons.FolderPlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFolder(parent) })
+                        DropdownMenuItem(text = { Text(tr("New file")) }, leadingIcon = { Icon(CodeinIcons.FilePlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFile(parent) })
+                        DropdownMenuItem(text = { Text(tr("New folder")) }, leadingIcon = { Icon(CodeinIcons.FolderPlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFolder(parent) })
                         FileTemplateKind.entries.forEach { kind ->
                             DropdownMenuItem(
                                 text = { Text("New ${kind.title}") },
@@ -195,12 +196,12 @@ fun FileExplorer(
                                 onClick = { menuFor = null; dialog = ExplorerDialog.FromTemplate(parent, kind) },
                             )
                         }
-                        DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(CodeinIcons.Type, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Rename(row) })
-                        DropdownMenuItem(text = { Text("Move to…") }, leadingIcon = { Icon(CodeinIcons.Folder, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Move(row) })
+                        DropdownMenuItem(text = { Text(tr("Rename")) }, leadingIcon = { Icon(CodeinIcons.Type, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Rename(row) })
+                        DropdownMenuItem(text = { Text(tr("Move to…")) }, leadingIcon = { Icon(CodeinIcons.Folder, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Move(row) })
                         if (!row.isDirectory) {
-                            DropdownMenuItem(text = { Text("Local history") }, leadingIcon = { Icon(CodeinIcons.History, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; onIntent(WorkspaceIntent.ShowHistory(row.relativePath)) })
+                            DropdownMenuItem(text = { Text(tr("Local history")) }, leadingIcon = { Icon(CodeinIcons.History, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; onIntent(WorkspaceIntent.ShowHistory(row.relativePath)) })
                         }
-                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(CodeinIcons.Trash, null, Modifier.size(Sizes.Icon), tint = MaterialTheme.colorScheme.error) }, onClick = { menuFor = null; dialog = ExplorerDialog.Delete(row) })
+                        DropdownMenuItem(text = { Text(tr("Delete"), color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(CodeinIcons.Trash, null, Modifier.size(Sizes.Icon), tint = MaterialTheme.colorScheme.error) }, onClick = { menuFor = null; dialog = ExplorerDialog.Delete(row) })
                     }
                 }
             }
@@ -221,8 +222,8 @@ fun FileExplorer(
             onDismissRequest = { dialog = null },
             title = { Text("Delete ${d.row.file.name}?") },
             text = { Text(if (d.row.isDirectory) "The folder and everything inside it will be deleted." else "The file will be deleted. Unsaved changes are lost.") },
-            confirmButton = { TextButton(onClick = { onIntent(WorkspaceIntent.Delete(d.row.relativePath)); dialog = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { onIntent(WorkspaceIntent.Delete(d.row.relativePath)); dialog = null }) { Text(tr("Delete"), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text(tr("Cancel")) } },
         )
         null -> Unit
     }
@@ -241,7 +242,7 @@ private fun MoveDialog(row: TreeRow, folders: List<String>, onDismiss: () -> Uni
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
-                    label = { Text("Destination folder") },
+                    label = { Text(tr("Destination folder")) },
                     placeholder = { Text("app/src/main/java/…") },
                     singleLine = true,
                     isError = invalid,
@@ -261,8 +262,8 @@ private fun MoveDialog(row: TreeRow, folders: List<String>, onDismiss: () -> Uni
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(value.trim().trim('/')) }, enabled = !invalid) { Text("Move") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onConfirm(value.trim().trim('/')) }, enabled = !invalid) { Text(tr("Move")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel")) } },
     )
 }
 
@@ -280,11 +281,11 @@ private fun NameDialog(title: String, initial: String, placeholder: String, onDi
                 singleLine = true,
                 placeholder = { Text(placeholder) },
                 isError = value.isNotEmpty() && invalid,
-                supportingText = { if (value.isNotEmpty() && invalid) Text("Names cannot contain slashes") },
+                supportingText = { if (value.isNotEmpty() && invalid) Text(tr("Names cannot contain slashes")) },
                 modifier = Modifier.padding(top = 4.dp),
             )
         },
-        confirmButton = { TextButton(onClick = { onConfirm(value.trim()) }, enabled = !invalid) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onConfirm(value.trim()) }, enabled = !invalid) { Text(tr("OK")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel")) } },
     )
 }

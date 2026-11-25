@@ -1,5 +1,6 @@
 package com.codein.ide.notify
 
+import com.codein.ide.core.ui.i18n.tr
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -41,11 +42,11 @@ class BuildNotifier @Inject constructor(@ApplicationContext private val context:
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val system = context.getSystemService(NotificationManager::class.java)
             system.createNotificationChannel(NotificationChannel(CHANNEL_PROGRESS, "Build progress", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Shown while a build runs, so Android keeps Codein running in the background"
+                description = tr("Shown while a build runs, so Android keeps Codein running in the background")
                 setShowBadge(false)
             })
             system.createNotificationChannel(NotificationChannel(CHANNEL_RESULT, "Build results", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Build finished or failed"
+                description = tr("Build finished or failed")
             })
         }
     }

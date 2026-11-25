@@ -1,5 +1,6 @@
 package com.codein.ide.editor.search
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.Checkbox
@@ -195,11 +196,11 @@ fun GlobalSearchPanel(
     val validation = FindReplaceEngine.validate(state.query, state.options)
     var confirmReplace by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
-        PanelHeader("Search in project", icon = CodeinIcons.Search) {
-            if (replace != null) ToolbarIconButton(CodeinIcons.Replace, "Replace in files", active = state.replaceOpen, size = 30.dp) { replace.onToggleReplace() }
-            ToolbarIconButton(CodeinIcons.CaseSensitive, "Match case", active = state.options.matchCase, size = 30.dp) { onOptionsChange(state.options.copy(matchCase = !state.options.matchCase)) }
-            ToolbarIconButton(CodeinIcons.WholeWord, "Whole word", active = state.options.wholeWord, size = 30.dp) { onOptionsChange(state.options.copy(wholeWord = !state.options.wholeWord)) }
-            ToolbarIconButton(CodeinIcons.Regex, "Regex", active = state.options.regex, size = 30.dp) { onOptionsChange(state.options.copy(regex = !state.options.regex)) }
+        PanelHeader(tr("Search in project"), icon = CodeinIcons.Search) {
+            if (replace != null) ToolbarIconButton(CodeinIcons.Replace, tr("Replace in files"), active = state.replaceOpen, size = 30.dp) { replace.onToggleReplace() }
+            ToolbarIconButton(CodeinIcons.CaseSensitive, tr("Match case"), active = state.options.matchCase, size = 30.dp) { onOptionsChange(state.options.copy(matchCase = !state.options.matchCase)) }
+            ToolbarIconButton(CodeinIcons.WholeWord, tr("Whole word"), active = state.options.wholeWord, size = 30.dp) { onOptionsChange(state.options.copy(wholeWord = !state.options.wholeWord)) }
+            ToolbarIconButton(CodeinIcons.Regex, tr("Regex"), active = state.options.regex, size = 30.dp) { onOptionsChange(state.options.copy(regex = !state.options.regex)) }
         }
         val invalid = validation as? QueryValidation.Invalid
         CompactTextField(
@@ -227,7 +228,7 @@ fun GlobalSearchPanel(
                 )
                 val replaceable = state.result?.let { r -> r.files.filter { it.relativePath !in state.excluded } }.orEmpty()
                 TextButton(onClick = { confirmReplace = true }, enabled = replaceable.isNotEmpty() && invalid == null && !state.searching) {
-                    Text("Replace all")
+                    Text(tr("Replace all"))
                 }
             }
         }
@@ -235,7 +236,7 @@ fun GlobalSearchPanel(
         CompactTextField(
             value = state.includeGlobs,
             onValueChange = onGlobsChange,
-            placeholder = "Files to include, e.g. *.kt",
+            placeholder = tr("Files to include, e.g. *.kt"),
             leadingIcon = CodeinIcons.Filter,
             textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 12f, false),
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
@@ -273,8 +274,8 @@ fun GlobalSearchPanel(
                         "each file's previous version is kept in its local history.",
                 )
             },
-            confirmButton = { TextButton(onClick = { confirmReplace = false; replace.onReplaceAll() }) { Text("Replace") } },
-            dismissButton = { TextButton(onClick = { confirmReplace = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { confirmReplace = false; replace.onReplaceAll() }) { Text(tr("Replace")) } },
+            dismissButton = { TextButton(onClick = { confirmReplace = false }) { Text(tr("Cancel")) } },
         )
     }
 }

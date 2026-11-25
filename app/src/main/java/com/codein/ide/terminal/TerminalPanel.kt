@@ -1,5 +1,6 @@
 package com.codein.ide.terminal
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -136,9 +137,9 @@ fun TerminalPanel(viewModel: TerminalViewModel, projectDir: File?, modifier: Mod
                 color = CodeinTheme.colors.textMuted,
                 modifier = Modifier.weight(1f),
             )
-            ToolbarIconButton(CodeinIcons.Stop, "Interrupt running command") { viewModel.interrupt() }
-            ToolbarIconButton(CodeinIcons.Trash, "Clear") { viewModel.clear() }
-            ToolbarIconButton(CodeinIcons.Refresh, "Restart shell") { viewModel.restart() }
+            ToolbarIconButton(CodeinIcons.Stop, tr("Interrupt running command")) { viewModel.interrupt() }
+            ToolbarIconButton(CodeinIcons.Trash, tr("Clear")) { viewModel.clear() }
+            ToolbarIconButton(CodeinIcons.Refresh, tr("Restart shell")) { viewModel.restart() }
         }
         SelectionContainer(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
@@ -192,7 +193,7 @@ fun TerminalPanel(viewModel: TerminalViewModel, projectDir: File?, modifier: Mod
                     }
                 },
             )
-            ToolbarIconButton(CodeinIcons.Send, "Run") { submit() }
+            ToolbarIconButton(CodeinIcons.Send, tr("Run")) { submit() }
         }
         // Keys a phone keyboard lacks. Ctrl stays armed until the next letter (Ctrl then C interrupts).
         Row(

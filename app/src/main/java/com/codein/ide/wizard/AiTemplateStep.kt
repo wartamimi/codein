@@ -1,5 +1,6 @@
 package com.codein.ide.wizard
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -63,15 +64,14 @@ internal fun AiTemplateCard(selected: Boolean, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(Spacing.md))
             Column(Modifier.weight(1f)) {
-                Text("Template from AI", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Describe the app you want. Your AI provider writes the screens and code on top of a Codein base project, and you review every file before it is created.",
+                Text(tr("Template from AI"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(tr("Describe the app you want. Your AI provider writes the screens and code on top of a Codein base project, and you review every file before it is created."),
                     style = MaterialTheme.typography.bodySmall,
                     color = CodeinTheme.colors.textMuted,
                 )
             }
             Spacer(Modifier.width(Spacing.sm))
-            PillChip("Compose · Views", selected = selected)
+            PillChip(tr("Compose · Views"), selected = selected)
         }
     }
 }
@@ -85,19 +85,19 @@ internal fun AiTemplateStep(
     summary: String,
     onRegenerateFile: (path: String, instruction: String) -> Unit = { _, _ -> },
 ) {
-    Text("Describe your app", style = MaterialTheme.typography.titleMedium)
+    Text(tr("Describe your app"), style = MaterialTheme.typography.titleMedium)
     Text(summary, style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
     OutlinedTextField(
         value = description,
         onValueChange = onDescriptionChange,
-        label = { Text("What should the app do?") },
-        placeholder = { Text("Screens, buttons, what happens when you tap them…") },
+        label = { Text(tr("What should the app do?")) },
+        placeholder = { Text(tr("Screens, buttons, what happens when you tap them…")) },
         minLines = 4,
         enabled = state !is AiTemplateState.Generating && state !is AiTemplateState.Creating,
         modifier = Modifier.fillMaxWidth(),
     )
     if (description.isBlank()) {
-        Text("Examples", style = MaterialTheme.typography.labelLarge)
+        Text(tr("Examples"), style = MaterialTheme.typography.labelLarge)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Examples.forEach { example -> PillChip(example.substringBefore(" with").substringBefore(" where").substringBefore(" for "), selected = false, onClick = { onDescriptionChange(example) }) }
         }
@@ -127,7 +127,7 @@ internal fun AiTemplateStep(
             )
         }
         is AiTemplateState.Failed -> CodeinCard(Modifier.fillMaxWidth()) {
-            Text("Could not generate the project", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
+            Text(tr("Could not generate the project"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
             Text(state.message, style = MaterialTheme.typography.bodySmall)
         }
         AiTemplateState.Creating -> LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -145,7 +145,7 @@ private fun GeneratedFiles(state: AiTemplateState.Ready, onRegenerateFile: (Stri
         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
     }
     CodeinCard(Modifier.fillMaxWidth()) {
-        Text("Review before creating", style = MaterialTheme.typography.labelLarge)
+        Text(tr("Review before creating"), style = MaterialTheme.typography.labelLarge)
         if (project.summary.isNotBlank()) Text(project.summary, style = MaterialTheme.typography.bodyMedium)
         Text(
             "${project.files.size} file(s)" + if (project.dependencies.isNotEmpty()) " · ${project.dependencies.size} extra dependenc${if (project.dependencies.size == 1) "y" else "ies"}" else "",
@@ -170,8 +170,8 @@ private fun GeneratedFiles(state: AiTemplateState.Ready, onRegenerateFile: (Stri
                 Spacer(Modifier.size(Spacing.sm))
                 if (isLayoutFile(path)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        PillChip("Preview", selected = showPreview, onClick = { showPreview = true })
-                        PillChip("XML", selected = !showPreview, onClick = { showPreview = false })
+                        PillChip(tr("Preview"), selected = showPreview, onClick = { showPreview = true })
+                        PillChip(tr("XML"), selected = !showPreview, onClick = { showPreview = false })
                     }
                     Spacer(Modifier.size(Spacing.xs))
                 }
@@ -187,7 +187,7 @@ private fun GeneratedFiles(state: AiTemplateState.Ready, onRegenerateFile: (Stri
                 OutlinedTextField(
                     value = instruction,
                     onValueChange = { instruction = it },
-                    label = { Text("Change for this file (optional)") },
+                    label = { Text(tr("Change for this file (optional)")) },
                     singleLine = true,
                     enabled = state.regenerating == null,
                     modifier = Modifier.fillMaxWidth(),
@@ -204,13 +204,13 @@ private fun GeneratedFiles(state: AiTemplateState.Ready, onRegenerateFile: (Stri
     }
     if (project.dependencies.isNotEmpty()) {
         CodeinCard(Modifier.fillMaxWidth()) {
-            Text("Extra dependencies", style = MaterialTheme.typography.labelLarge)
+            Text(tr("Extra dependencies"), style = MaterialTheme.typography.labelLarge)
             project.dependencies.forEach { Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
         }
     }
     if (project.rejected.isNotEmpty()) {
         CodeinCard(Modifier.fillMaxWidth()) {
-            Text("Skipped", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
+            Text(tr("Skipped"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
             project.rejected.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }

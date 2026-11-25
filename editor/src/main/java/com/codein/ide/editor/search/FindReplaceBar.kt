@@ -1,5 +1,6 @@
 package com.codein.ide.editor.search
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -130,7 +131,7 @@ fun FindReplaceBar(state: FindBarState, onAction: (FindBarAction) -> Unit, modif
                 ) { onAction(FindBarAction.ToggleReplace) }
                 FindField(
                     value = state.query,
-                    placeholder = "Find",
+                    placeholder = tr("Find"),
                     error = invalid != null,
                     counter = state.counterText,
                     counterIsError = invalid != null || noResults,
@@ -138,9 +139,9 @@ fun FindReplaceBar(state: FindBarState, onAction: (FindBarAction) -> Unit, modif
                     onSubmit = { onAction(FindBarAction.Next) },
                     modifier = Modifier.weight(1f).focusRequester(focus),
                 )
-                ToolbarIconButton(CodeinIcons.ArrowUp, "Previous match", size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Previous) }
-                ToolbarIconButton(CodeinIcons.ArrowDown, "Next match", size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Next) }
-                ToolbarIconButton(CodeinIcons.Close, "Close find", size = 28.dp) { onAction(FindBarAction.Close) }
+                ToolbarIconButton(CodeinIcons.ArrowUp, tr("Previous match"), size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Previous) }
+                ToolbarIconButton(CodeinIcons.ArrowDown, tr("Next match"), size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.Next) }
+                ToolbarIconButton(CodeinIcons.Close, tr("Close find"), size = 28.dp) { onAction(FindBarAction.Close) }
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -177,7 +178,7 @@ fun FindReplaceBar(state: FindBarState, onAction: (FindBarAction) -> Unit, modif
                         onSubmit = { onAction(FindBarAction.ReplaceOne) },
                         modifier = Modifier.weight(1f),
                     )
-                    ToolbarIconButton(CodeinIcons.Replace, "Replace", size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.ReplaceOne) }
+                    ToolbarIconButton(CodeinIcons.Replace, tr("Replace"), size = 28.dp, enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.ReplaceOne) }
                     TogglePill("All", "Replace all", active = state.matches.isNotEmpty(), enabled = state.matches.isNotEmpty()) { onAction(FindBarAction.ReplaceAll) }
                     Spacer(Modifier.width(Spacing.xs))
                 }

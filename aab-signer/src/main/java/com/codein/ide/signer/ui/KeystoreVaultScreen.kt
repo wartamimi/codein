@@ -1,5 +1,6 @@
 package com.codein.ide.signer.ui
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -76,9 +77,9 @@ fun KeystoreVaultScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
-        PanelHeader("Keystore Vault", icon = CodeinIcons.Key) {
-            ToolbarIconButton(CodeinIcons.Download, "Import keystore", size = 32.dp) { onIntent(KeystoreVaultIntent.ShowImport(true)) }
-            ToolbarIconButton(CodeinIcons.Plus, "Create keystore", size = 32.dp) { onIntent(KeystoreVaultIntent.ShowCreate(true)) }
+        PanelHeader(tr("Keystore Vault"), icon = CodeinIcons.Key) {
+            ToolbarIconButton(CodeinIcons.Download, tr("Import keystore"), size = 32.dp) { onIntent(KeystoreVaultIntent.ShowImport(true)) }
+            ToolbarIconButton(CodeinIcons.Plus, tr("Create keystore"), size = 32.dp) { onIntent(KeystoreVaultIntent.ShowCreate(true)) }
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -147,9 +148,9 @@ private fun KeystoreCard(
         FingerprintRow("SHA-256", keystore.fingerprints.sha256) { copy(context, "SHA-256", keystore.fingerprints.sha256) }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.End) {
             if (keystore.isDebug) {
-                TextButton(onClick = onRegenerate) { Text("Regenerate") }
+                TextButton(onClick = onRegenerate) { Text(tr("Regenerate")) }
             } else {
-                TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDelete) { Text(tr("Delete"), color = MaterialTheme.colorScheme.error) }
                 TextButton(onClick = onSelect, enabled = !selectedForRelease) { Text(if (selectedForRelease) "Release key" else "Use for release") }
             }
         }
@@ -197,7 +198,7 @@ private fun CreateKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("New release keystore", style = MaterialTheme.typography.titleLarge)
+        Text(tr("New release keystore"), style = MaterialTheme.typography.titleLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             KeystoreType.entries.forEach { t -> PillChip(t.displayName, selected = f.type == t, onClick = { update { copy(type = t) } }) }
         }
@@ -205,13 +206,13 @@ private fun CreateKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
         Field("Key alias", f.alias, error = if (f.alias.isBlank()) "Required" else null) { update { copy(alias = it) } }
         Field("Keystore password", f.storePassword, password = true, error = if (f.storePassword.length < 6) "At least 6 characters" else null) { update { copy(storePassword = it) } }
         if (f.type == KeystoreType.Jks) Field("Key password", f.keyPassword, password = true, error = if (f.keyPassword.isNotEmpty() && f.keyPassword.length < 6) "At least 6 characters" else null) { update { copy(keyPassword = it) } }
-        Text("Key size", style = MaterialTheme.typography.labelLarge)
+        Text(tr("Key size"), style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(2048, 4096).forEach { size -> PillChip("RSA $size", selected = f.keySize == size, onClick = { update { copy(keySize = size) } }) }
         }
         Text("Validity: ${f.validityYears} years", style = MaterialTheme.typography.labelLarge)
         Slider(value = f.validityYears.toFloat(), onValueChange = { update { copy(validityYears = it.roundToInt()) } }, valueRange = 1f..50f, steps = 48)
-        Text("Certificate", style = MaterialTheme.typography.labelLarge)
+        Text(tr("Certificate"), style = MaterialTheme.typography.labelLarge)
         Field("First and last name (CN)", f.commonName) { update { copy(commonName = it) } }
         Field("Organizational unit (OU)", f.organizationalUnit) { update { copy(organizationalUnit = it) } }
         Field("Organization (O)", f.organization) { update { copy(organization = it) } }
@@ -221,8 +222,8 @@ private fun CreateKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (state.working) LinearProgressIndicator(Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            OutlinedButton(onClick = { onIntent(KeystoreVaultIntent.ShowCreate(false)) }) { Text("Cancel") }
-            Button(onClick = { onIntent(KeystoreVaultIntent.SubmitCreate) }, enabled = !state.working) { Text("Generate") }
+            OutlinedButton(onClick = { onIntent(KeystoreVaultIntent.ShowCreate(false)) }) { Text(tr("Cancel")) }
+            Button(onClick = { onIntent(KeystoreVaultIntent.SubmitCreate) }, enabled = !state.working) { Text(tr("Generate")) }
         }
     }
 }
@@ -243,7 +244,7 @@ private fun ImportKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Import keystore", style = MaterialTheme.typography.titleLarge)
+        Text(tr("Import keystore"), style = MaterialTheme.typography.titleLarge)
         OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
             Icon(CodeinIcons.FolderOpen, null, Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
@@ -256,8 +257,8 @@ private fun ImportKeystoreSheet(state: KeystoreVaultState, onIntent: (KeystoreVa
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (state.working) LinearProgressIndicator(Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            OutlinedButton(onClick = { onIntent(KeystoreVaultIntent.ShowImport(false)) }) { Text("Cancel") }
-            Button(onClick = { onIntent(KeystoreVaultIntent.SubmitImport) }, enabled = !state.working) { Text("Import") }
+            OutlinedButton(onClick = { onIntent(KeystoreVaultIntent.ShowImport(false)) }) { Text(tr("Cancel")) }
+            Button(onClick = { onIntent(KeystoreVaultIntent.SubmitImport) }, enabled = !state.working) { Text(tr("Import")) }
         }
     }
 }

@@ -1,5 +1,24 @@
 package com.codein.ide.settings
 
+import com.codein.ide.core.ui.i18n.I18n
+import com.codein.ide.core.ui.prefs.UiPrefs
+import com.codein.ide.core.ui.components.StudioSectionCard
+import com.codein.ide.core.ui.components.HairlineDivider
+import com.codein.ide.core.ui.components.VerticalHairline
+import com.codein.ide.core.ui.components.SegmentedTabs
+import com.codein.ide.core.ui.theme.Motion
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.codein.ide.core.ui.i18n.tr
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -180,6 +199,7 @@ class SettingsViewModel @Inject constructor(
 }
 
 private enum class SettingsTab(val title: String, val icon: ImageVector) {
+    General("General", CodeinIcons.Settings),
     Toolchain("Toolchain", CodeinIcons.Hammer),
     Ai("AI providers", CodeinIcons.Sparkle),
     Signing("Signing", CodeinIcons.Key),
@@ -194,48 +214,137 @@ fun SettingsScreen(
     aiSettingsViewModel: AiSettingsViewModel = hiltViewModel(),
     vaultViewModel: KeystoreVaultViewModel = hiltViewModel(),
 ) {
-    var tab by rememberSaveable { mutableStateOf(SettingsTab.Toolchain) }
+    var tab by rememberSaveable { mutableStateOf(SettingsTab.General) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { viewModel.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(Unit) { vaultViewModel.messages.collect { snackbar.showSnackbar(it) } }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    val content: @Composable (SettingsTab) -> Unit = { t ->
+        when (t) {
+            SettingsTab.General -> GeneralSection()
+            SettingsTab.Toolchain -> ToolchainSection(viewModel)
+            SettingsTab.Ai -> {
+                val ai by aiSettingsViewModel.settings.collectAsStateWithLifecycle()
+                val fetch by aiSettingsViewModel.fetch.collectAsStateWithLifecycle()
+                Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    AiProviderSettings(
+                        settings = ai,
+                        fetch = fetch,
+                        onSelectProvider = { aiSettingsViewModel.selectProvider(it) },
+                        onSave = { aiSettingsViewModel.save(it) },
+                        onRefreshModels = { aiSettingsViewModel.refreshModels(it) },
+                        onClearKey = { aiSettingsViewModel.clearKey(it) },
+                        onMaxTokens = { aiSettingsViewModel.setMaxTokens(it) },
+                    )
+                }
+            }
+            SettingsTab.Signing -> {
+                val vault by vaultViewModel.state.collectAsStateWithLifecycle()
+                KeystoreVaultScreen(vault, vaultViewModel::onIntent, Modifier.widthIn(max = 840.dp).fillMaxSize())
+            }
+            SettingsTab.Editor -> EditorSection(viewModel)
+        }
+    }
+
+    // Same frame as the workspace: tier-1 chrome with a hairline, segmented tabs on phones and a
+    // section list beside the content on wide screens.
+    BoxWithConstraints(Modifier.fillMaxSize().background(CodeinTheme.colors.base)) {
+        val wide = maxWidth >= 840.dp
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().background(CodeinTheme.colors.tier1).padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 ToolbarIconButton(CodeinIcons.ArrowLeft, "Back", onClick = onBack)
-                Text("Settings", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
+                Text(tr("Settings"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsTab.entries.forEach { t -> PillChip(t.title, icon = t.icon, selected = t == tab, onClick = { tab = t }) }
-            }
-            Spacer(Modifier.size(8.dp))
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                when (tab) {
-                    SettingsTab.Toolchain -> ToolchainSection(viewModel)
-                    SettingsTab.Ai -> {
-                        val ai by aiSettingsViewModel.settings.collectAsStateWithLifecycle()
-                        val fetch by aiSettingsViewModel.fetch.collectAsStateWithLifecycle()
-                        Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                            AiProviderSettings(
-                                settings = ai,
-                                fetch = fetch,
-                                onSelectProvider = { aiSettingsViewModel.selectProvider(it) },
-                                onSave = { aiSettingsViewModel.save(it) },
-                                onRefreshModels = { aiSettingsViewModel.refreshModels(it) },
-                                onClearKey = { aiSettingsViewModel.clearKey(it) },
-                                onMaxTokens = { aiSettingsViewModel.setMaxTokens(it) },
-                            )
+            HairlineDivider()
+            if (wide) {
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    Column(
+                        Modifier.width(240.dp).fillMaxHeight().background(CodeinTheme.colors.tier1).padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        SettingsTab.entries.forEach { t ->
+                            val selected = t == tab
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else androidx.compose.ui.graphics.Color.Transparent)
+                                    .clickable(onClickLabel = tr(t.title)) { tab = t }
+                                    .semantics { this.selected = selected }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(t.icon, null, tint = if (selected) MaterialTheme.colorScheme.primary else CodeinTheme.colors.textMuted, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Text(tr(t.title), style = MaterialTheme.typography.labelLarge, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                            }
                         }
                     }
-                    SettingsTab.Signing -> {
-                        val vault by vaultViewModel.state.collectAsStateWithLifecycle()
-                        KeystoreVaultScreen(vault, vaultViewModel::onIntent, Modifier.widthIn(max = 840.dp).fillMaxSize())
+                    VerticalHairline()
+                    AnimatedContent(tab, transitionSpec = { fadeIn(Motion.switch()) togetherWith fadeOut(Motion.switch()) }, label = "settings-tab", modifier = Modifier.weight(1f).fillMaxHeight()) { t ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) { content(t) }
                     }
-                    SettingsTab.Editor -> EditorSection(viewModel)
+                }
+            } else {
+                SegmentedTabs(
+                    items = SettingsTab.entries.toList(),
+                    selected = tab,
+                    onSelect = { tab = it },
+                    icon = { it.icon },
+                    label = { it.title },
+                    modifier = Modifier.background(CodeinTheme.colors.tier1).padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+                HairlineDivider()
+                AnimatedContent(tab, transitionSpec = { fadeIn(Motion.switch()) togetherWith fadeOut(Motion.switch()) }, label = "settings-tab", modifier = Modifier.weight(1f).fillMaxWidth()) { t ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) { content(t) }
                 }
             }
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
+}
+
+/** Interface language, one-handed mode and the first-run tour. */
+@Composable
+private fun GeneralSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val oneHanded by UiPrefs.oneHanded.collectAsStateWithLifecycle()
+    var language by remember { mutableStateOf(I18n.language) }
+    Column(
+        Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        StudioSectionCard(tr("Interface language"), icon = CodeinIcons.Type, subtitle = tr("Code, logs and file names stay as they are. Codein AI already answers in your device language.")) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                I18n.Language.entries.forEach { option ->
+                    PillChip(
+                        option.displayName,
+                        selected = option == language,
+                        onClick = {
+                            if (option != language) {
+                                language = option
+                                I18n.set(context, option)
+                                // Every screen reads the language when it is drawn, so start over.
+                                (context as? android.app.Activity)?.recreate()
+                            }
+                        },
+                    )
+                }
+            }
+        }
+        StudioSectionCard(tr("One-handed mode"), icon = CodeinIcons.Smartphone, subtitle = tr("Moves the editor toolbar to the bottom of the screen, within thumb reach")) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(tr(if (oneHanded) "On" else "Off"), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Switch(checked = oneHanded, onCheckedChange = { UiPrefs.setOneHanded(context, it) })
+            }
+        }
+        StudioSectionCard(tr("Show the tour again"), icon = CodeinIcons.Sparkle, subtitle = tr("A short walk through projects, the editor, builds and Codein AI.")) {
+            OutlinedButton(onClick = { UiPrefs.setTourSeen(context, false) }) { Text(tr("Show the tour again")) }
+        }
     }
 }
 
@@ -263,7 +372,7 @@ private fun ToolchainSection(viewModel: SettingsViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ToolCard(
-            title = "AAPT2",
+            title = tr("AAPT2"),
             ok = status.aapt2 != null,
             detail = status.aapt2?.absolutePath
                 ?: "This build of Codein shipped without aapt2 for this CPU (it is bundled for arm64-v8a and x86_64). Android only lets apps execute binaries from ${viewModel.nativeLibraryDir}, so it cannot be added at runtime.",
@@ -279,7 +388,7 @@ private fun ToolchainSection(viewModel: SettingsViewModel) {
             }
         }
         ToolCard(
-            title = "Kotlin compiler",
+            title = tr("Kotlin compiler"),
             ok = jars.any { it.startsWith("kotlin-compiler") },
             detail = if (jars.isEmpty()) {
                 "Needed only for Kotlin projects. Codein downloads kotlin-compiler-embeddable ${KotlinToolchainInstaller.KOTLIN_VERSION} and its runtime jars from Maven Central (about 70 MB, checksums verified) and converts them for ART on the first Kotlin build. Running kotlinc on Android is experimental and needs plenty of free RAM."
@@ -291,10 +400,10 @@ private fun ToolchainSection(viewModel: SettingsViewModel) {
                 Spacer(Modifier.size(4.dp))
                 LinearProgressIndicator(progress = { progress.second }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.size(8.dp))
-                OutlinedButton(onClick = { viewModel.cancelKotlinDownload() }) { Text("Cancel") }
+                OutlinedButton(onClick = { viewModel.cancelKotlinDownload() }) { Text(tr("Cancel")) }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Include Jetpack Compose compiler plugin", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text(tr("Include Jetpack Compose compiler plugin"), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Switch(checked = withCompose, onCheckedChange = { withCompose = it })
                 }
                 Spacer(Modifier.size(8.dp))
@@ -302,15 +411,15 @@ private fun ToolchainSection(viewModel: SettingsViewModel) {
                     Button(onClick = { viewModel.downloadKotlinCompiler(withCompose) }) {
                         Text(if (jars.isEmpty()) "Download Kotlin compiler" else "Download missing jars")
                     }
-                    OutlinedButton(onClick = { kotlinPicker.launch(arrayOf("application/java-archive", "application/zip", "application/octet-stream")) }) { Text("Import jars") }
+                    OutlinedButton(onClick = { kotlinPicker.launch(arrayOf("application/java-archive", "application/zip", "application/octet-stream")) }) { Text(tr("Import jars")) }
                 }
                 if (jars.isNotEmpty()) {
                     Spacer(Modifier.size(8.dp))
-                    OutlinedButton(onClick = { viewModel.clearKotlinCompiler() }) { Text("Remove") }
+                    OutlinedButton(onClick = { viewModel.clearKotlinCompiler() }) { Text(tr("Remove")) }
                 }
             }
         }
-        ToolCard(title = "Java compiler (ECJ), D8, apksig, bundletool", ok = true, detail = "Bundled with Codein and always available.")
+        ToolCard(title = tr("Java compiler (ECJ), D8, apksig, bundletool"), ok = true, detail = "Bundled with Codein and always available.")
         Text(
             if (status.missing.isEmpty()) "Toolchain ready." else "Missing: ${status.missing.joinToString()}",
             style = MaterialTheme.typography.labelLarge,
@@ -348,9 +457,9 @@ private fun EditorSection(viewModel: SettingsViewModel) {
             Text("${prefs.codingFont.displayName} · ${prefs.fontSizeSp.toInt()} sp · ${prefs.editorScheme.displayName}", style = MaterialTheme.typography.titleSmall)
             Text("Tab ${prefs.tabSize} · ${if (prefs.softWrap) "wrap" else "no wrap"} · ${if (prefs.ligatures) "ligatures" else "no ligatures"} · theme ${prefs.themeMode.name}", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
             Spacer(Modifier.size(8.dp))
-            Button(onClick = { open = true }) { Text("Customize editor") }
+            Button(onClick = { open = true }) { Text(tr("Customize editor")) }
         }
-        Text("Fonts: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro and Plus Jakarta Sans are bundled under the SIL Open Font License 1.1.", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+        Text(tr("Fonts: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro and Plus Jakarta Sans are bundled under the SIL Open Font License 1.1."), style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
     }
     if (open) EditorPreferencesSheet(prefs, onChange = { viewModel.onPreference(it) }, onDismiss = { open = false })
 }

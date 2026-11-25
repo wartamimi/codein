@@ -1,5 +1,6 @@
 package com.codein.ide.editor.palette
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -172,8 +173,7 @@ fun CommandPalette(
                     Spacer(Modifier.width(Spacing.md))
                     Box(Modifier.weight(1f)) {
                         if (query.isEmpty()) {
-                            Text(
-                                "Files, # symbols, > commands, @ build tasks",
+                            Text(tr("Files, # symbols, > commands, @ build tasks"),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = CodeinTheme.colors.textMuted,
                                 maxLines = 1,
@@ -223,7 +223,7 @@ fun CommandPalette(
                     }
                 }
                 if (filtered.isEmpty()) {
-                    Text("No matches", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.lg))
+                    Text(tr("No matches"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.lg))
                 }
             }
         }

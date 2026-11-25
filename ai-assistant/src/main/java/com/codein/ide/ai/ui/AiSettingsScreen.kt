@@ -1,5 +1,6 @@
 package com.codein.ide.ai.ui
 
+import com.codein.ide.core.ui.i18n.tr
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -206,7 +207,7 @@ fun AiProviderSettings(
         ProviderGrid(settings, provider, onSelectProvider)
 
         StudioSectionCard(
-            title = "Connection",
+            title = tr("Connection"),
             icon = CodeinIcons.Server,
             subtitle = if (provider == AiProvider.Custom) "Any endpoint that speaks one of the supported protocols" else format.endpointHint,
         ) {
@@ -226,8 +227,8 @@ fun AiProviderSettings(
                             )
                         }
                     }
-                    Field(value = name, onValueChange = { name = it; dirty() }, label = "Name", placeholder = "My provider")
-                    Text("Protocol", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Field(value = name, onValueChange = { name = it; dirty() }, label = "Name", placeholder = tr("My provider"))
+                    Text(tr("Protocol"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     SegmentedTabs(
                         items = ApiFormat.entries.toList(),
                         selected = format,
@@ -283,7 +284,7 @@ fun AiProviderSettings(
             }
         }
 
-        StudioSectionCard(title = "Max output tokens", icon = CodeinIcons.Layers, subtitle = "${settings.maxOutputTokens} tokens per reply") {
+        StudioSectionCard(title = tr("Max output tokens"), icon = CodeinIcons.Layers, subtitle = "${settings.maxOutputTokens} tokens per reply") {
             Slider(
                 value = settings.maxOutputTokens.toFloat(),
                 onValueChange = { onMaxTokens((it / 1024f).roundToInt() * 1024) },
@@ -294,8 +295,7 @@ fun AiProviderSettings(
         Row(verticalAlignment = Alignment.Top) {
             Icon(CodeinIcons.Lock, null, tint = CodeinTheme.colors.textMuted, modifier = Modifier.padding(top = 2.dp).size(Sizes.IconSm))
             Spacer(Modifier.width(Spacing.sm))
-            Text(
-                "Keys are encrypted with an AES-256-GCM key held in the Android Keystore and never leave the device except in requests to the provider you choose.",
+            Text(tr("Keys are encrypted with an AES-256-GCM key held in the Android Keystore and never leave the device except in requests to the provider you choose."),
                 style = MaterialTheme.typography.bodySmall,
                 color = CodeinTheme.colors.textMuted,
             )
@@ -380,7 +380,7 @@ private fun ModelSection(
         if (q.isEmpty() || available.any { it == q }) available else available.filter { it.contains(q, ignoreCase = true) }
     }
     StudioSectionCard(
-        title = "Model",
+        title = tr("Model"),
         icon = CodeinIcons.Bot,
         subtitle = when {
             fetch.loading -> "Fetching models…"
@@ -393,7 +393,7 @@ private fun ModelSection(
                     SpinningIcon(CodeinIcons.Refresh, MaterialTheme.colorScheme.primary, Modifier.size(Sizes.Icon))
                 }
             } else {
-                ToolbarIconButton(CodeinIcons.Refresh, "Refresh models", tint = MaterialTheme.colorScheme.primary, onClick = onRefresh)
+                ToolbarIconButton(CodeinIcons.Refresh, tr("Refresh models"), tint = MaterialTheme.colorScheme.primary, onClick = onRefresh)
             }
         },
     ) {
@@ -425,7 +425,7 @@ private fun ModelSection(
                         provider.suggestedModels.forEach { m -> PillChip(m, selected = m == model, onClick = { onModel(m) }) }
                     }
                 }
-                PillChip("Refresh models", icon = CodeinIcons.Refresh, onClick = onRefresh.takeUnless { fetch.loading })
+                PillChip(tr("Refresh models"), icon = CodeinIcons.Refresh, onClick = onRefresh.takeUnless { fetch.loading })
             } else {
                 Column(
                     Modifier
@@ -506,7 +506,7 @@ private fun ApiKeyField(value: String, onValueChange: (String) -> Unit, current:
                 color = if (current?.hasApiKey == true) CodeinTheme.colors.success else CodeinTheme.colors.textMuted,
                 modifier = Modifier.weight(1f),
             )
-            if (current?.hasApiKey == true) PillChip("Remove", icon = CodeinIcons.Trash, accent = MaterialTheme.colorScheme.error, onClick = onClear)
+            if (current?.hasApiKey == true) PillChip(tr("Remove"), icon = CodeinIcons.Trash, accent = MaterialTheme.colorScheme.error, onClick = onClear)
         }
     }
 }

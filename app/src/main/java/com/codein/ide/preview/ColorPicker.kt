@@ -1,5 +1,6 @@
 package com.codein.ide.preview
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -87,7 +88,7 @@ fun ColorPickerDialog(literal: ColorLiteral, composeStyle: Boolean, onDismiss: (
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Pick a color") },
+        title = { Text(tr("Pick a color")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -110,7 +111,7 @@ fun ColorPickerDialog(literal: ColorLiteral, composeStyle: Boolean, onDismiss: (
                             hue = out[0]; sat = out[1]; value = out[2]; alpha = ((parsed shr 24) and 0xFF) / 255f
                         }
                     },
-                    label = { Text("Hex") },
+                    label = { Text(tr("Hex")) },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                     modifier = Modifier.fillMaxWidth(),
@@ -118,7 +119,7 @@ fun ColorPickerDialog(literal: ColorLiteral, composeStyle: Boolean, onDismiss: (
             }
         },
         confirmButton = { TextButton(onClick = { onPick(result()) }) { Text("Use ${ColorLiterals.format(argb)}") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel")) } },
     )
 }
 

@@ -1,5 +1,7 @@
 package com.codein.ide.home
 
+import com.codein.ide.core.ui.prefs.UiPrefs
+import com.codein.ide.core.ui.i18n.tr
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -103,10 +105,10 @@ fun HomeScreen(
                     ) { Icon(CodeinIcons.BrandMark, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp)) }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Codein", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("Build Android apps on Android", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+                        Text(tr("Codein"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text(tr("Build Android apps on Android"), style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
                     }
-                    ToolbarIconButton(CodeinIcons.Settings, "Settings", onClick = onOpenSettings)
+                    ToolbarIconButton(CodeinIcons.Settings, tr("Settings"), onClick = onOpenSettings)
                 }
             }
             item {
@@ -132,7 +134,7 @@ fun HomeScreen(
             }
             item {
                 Row(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Recent projects", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Text(tr("Recent projects"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     CountBadge(recent.size.toString(), MaterialTheme.colorScheme.primary)
                 }
             }
@@ -153,8 +155,7 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = CodeinTheme.colors.textMuted,
                             )
-                            Text(
-                                "Opened " + DateUtils.getRelativeTimeSpanString(project.lastOpenedAt).toString().lowercase(),
+                            Text(tr("Opened ") + DateUtils.getRelativeTimeSpanString(project.lastOpenedAt).toString().lowercase(),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = CodeinTheme.colors.textMuted,
                             )
@@ -167,28 +168,34 @@ fun HomeScreen(
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
 
+    val tourSeen by UiPrefs.tourSeen.collectAsStateWithLifecycle()
+    if (!tourSeen) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        FirstRunTour(onFinish = { UiPrefs.setTourSeen(context, true) })
+    }
+
     if (cloneDialog) {
         var url by rememberSaveable { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { cloneDialog = false },
-            title = { Text("Clone repository") },
+            title = { Text(tr("Clone repository")) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedTextField(url, { url = it }, singleLine = true, placeholder = { Text("https://github.com/user/app.git") })
-                    Text("Private repositories use the token saved in the Git panel's credentials.", style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
+                    Text(tr("Private repositories use the token saved in the Git panel's credentials."), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
                 }
             },
-            confirmButton = { TextButton(onClick = { cloneDialog = false; viewModel.clone(url) }, enabled = url.startsWith("http")) { Text("Clone") } },
-            dismissButton = { TextButton(onClick = { cloneDialog = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { cloneDialog = false; viewModel.clone(url) }, enabled = url.startsWith("http")) { Text(tr("Clone")) } },
+            dismissButton = { TextButton(onClick = { cloneDialog = false }) { Text(tr("Cancel")) } },
         )
     }
     deleteTarget?.let { project ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text("Delete ${project.name}?") },
-            text = { Text("The project folder and all its files are removed from this device. Pushed Git history is not affected.") },
-            confirmButton = { TextButton(onClick = { viewModel.delete(project); deleteTarget = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancel") } },
+            text = { Text(tr("The project folder and all its files are removed from this device. Pushed Git history is not affected.")) },
+            confirmButton = { TextButton(onClick = { viewModel.delete(project); deleteTarget = null }) { Text(tr("Delete"), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text(tr("Cancel")) } },
         )
     }
 }
@@ -198,7 +205,7 @@ private fun ActionCard(title: String, subtitle: String, icon: androidx.compose.u
     CodeinCard(modifier, onClick = if (enabled) onClick else null) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(8.dp))
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(subtitle, style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
+        Text(tr(title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Text(tr(subtitle), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
     }
 }

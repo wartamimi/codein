@@ -1,5 +1,6 @@
 package com.codein.ide.core.ui.components
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -217,7 +218,7 @@ fun PillChip(
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         if (icon != null) Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(14.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(tr(text), style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (trailing != null) Icon(trailing, contentDescription = null, tint = fg.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
     }
 }
@@ -252,13 +253,13 @@ fun ToolbarIconButton(
                 indication = ripple(bounded = false, radius = size / 2 + 4.dp),
                 enabled = enabled,
                 role = androidx.compose.ui.semantics.Role.Button,
-                onClickLabel = contentDescription,
+                onClickLabel = tr(contentDescription),
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(bg), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = contentDescription, tint = if (enabled) tint else tint.copy(alpha = 0.35f), modifier = Modifier.size(iconSize))
+            Icon(icon, contentDescription = tr(contentDescription), tint = if (enabled) tint else tint.copy(alpha = 0.35f), modifier = Modifier.size(iconSize))
         }
     }
 }
@@ -448,10 +449,10 @@ fun <T> SegmentedTabs(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (icon != null) Icon(icon(item), contentDescription = label(item), tint = if (isSelected) MaterialTheme.colorScheme.primary else fg, modifier = Modifier.size(Sizes.IconSm))
+                    if (icon != null) Icon(icon(item), contentDescription = tr(label(item)), tint = if (isSelected) MaterialTheme.colorScheme.primary else fg, modifier = Modifier.size(Sizes.IconSm))
                     if (showLabels) {
                         if (icon != null) Spacer(Modifier.width(Spacing.xs))
-                        Text(label(item), style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(tr(label(item)), style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -579,7 +580,7 @@ fun PanelHeader(
             Spacer(Modifier.width(Spacing.sm))
         }
         Text(
-            title.uppercase(),
+            tr(title).uppercase(),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -621,8 +622,8 @@ fun EmptyState(icon: ImageVector, title: String, message: String, modifier: Modi
         ) {
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         }
-        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(tr(title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(tr(message), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         if (action != null) action()
     }
 }

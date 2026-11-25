@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -169,8 +170,8 @@ private fun BuildHistoryView(history: List<BuildRecord>, size: ApkSize?) {
     if (history.isEmpty()) {
         EmptyState(
             icon = CodeinIcons.History,
-            title = "No builds yet",
-            message = "Each build is listed here with its time, result and APK size.",
+            title = tr("No builds yet"),
+            message = tr("Each build is listed here with its time, result and APK size."),
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg),
         )
         return
@@ -241,7 +242,7 @@ private fun ApkSizeCard(size: ApkSize) {
             }
         }
         if (size.largest.isNotEmpty()) {
-            Text("Largest files", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = Spacing.xs))
+            Text(tr("Largest files"), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = Spacing.xs))
             size.largest.take(5).forEach { e ->
                 Row {
                     Text(e.path, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -437,8 +438,8 @@ private fun DiagnosticCard(d: CompilerDiagnostic, onOpen: () -> Unit, onFix: () 
             Spacer(Modifier.weight(1f))
             CountBadge(d.source.name, color)
             if (d.severity == Severity.Error) {
-                PillChip("Explain", icon = CodeinIcons.Bot, modifier = Modifier.padding(start = Spacing.xs), onClick = onExplain)
-                PillChip("Fix with AI", icon = CodeinIcons.Sparkle, selected = true, modifier = Modifier.padding(start = Spacing.xs), onClick = onFix)
+                PillChip(tr("Explain"), icon = CodeinIcons.Bot, modifier = Modifier.padding(start = Spacing.xs), onClick = onExplain)
+                PillChip(tr("Fix with AI"), icon = CodeinIcons.Sparkle, selected = true, modifier = Modifier.padding(start = Spacing.xs), onClick = onFix)
             }
             Spacer(Modifier.width(Spacing.xs))
         }

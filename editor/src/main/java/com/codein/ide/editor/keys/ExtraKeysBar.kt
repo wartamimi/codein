@@ -1,5 +1,6 @@
 package com.codein.ide.editor.keys
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.animateColorAsState
@@ -214,6 +215,6 @@ private fun AiFixChip(highlighted: Boolean, onClick: () -> Unit, modifier: Modif
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Icon(CodeinIcons.Sparkle, null, tint = fg, modifier = Modifier.size(Sizes.IconSm))
-        Text("AI Fix", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = fg)
+        Text(tr("AI Fix"), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = fg)
     }
 }

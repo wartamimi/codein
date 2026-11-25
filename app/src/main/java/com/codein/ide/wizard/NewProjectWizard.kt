@@ -1,5 +1,6 @@
 package com.codein.ide.wizard
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -100,8 +101,8 @@ fun NewProjectWizard(
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            ToolbarIconButton(CodeinIcons.ArrowLeft, "Back") { if (step == 0) onBack() else step-- }
-            Text("New project", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            ToolbarIconButton(CodeinIcons.ArrowLeft, tr("Back")) { if (step == 0) onBack() else step-- }
+            Text(tr("New project"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 4.dp))
             StepDots(step)
             Spacer(Modifier.width(12.dp))
         }
@@ -113,7 +114,7 @@ fun NewProjectWizard(
                 ) {
                     when (current) {
                         0 -> {
-                            Text("Choose a template", style = MaterialTheme.typography.titleMedium)
+                            Text(tr("Choose a template"), style = MaterialTheme.typography.titleMedium)
                             ProjectTemplate.entries.chunked(2).forEach { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                                     pair.forEach { t ->
@@ -125,14 +126,14 @@ fun NewProjectWizard(
                             AiTemplateCard(selected = aiMode) { aiMode = true }
                         }
                         1 -> {
-                            Text("Project details", style = MaterialTheme.typography.titleMedium)
+                            Text(tr("Project details"), style = MaterialTheme.typography.titleMedium)
                             OutlinedTextField(
                                 value = name,
                                 onValueChange = {
                                     name = it
                                     if (!packageEdited) packageName = ProjectSpec.suggestPackage(it)
                                 },
-                                label = { Text("Name") },
+                                label = { Text(tr("Name")) },
                                 isError = nameError != null,
                                 supportingText = { nameError?.let { Text(it) } },
                                 singleLine = true,
@@ -141,20 +142,20 @@ fun NewProjectWizard(
                             OutlinedTextField(
                                 value = packageName,
                                 onValueChange = { packageName = it.trim(); packageEdited = true },
-                                label = { Text("Package name") },
+                                label = { Text(tr("Package name")) },
                                 isError = packageError != null,
                                 supportingText = { packageError?.let { Text(it) } },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             if (aiMode) {
-                                Text("UI toolkit", style = MaterialTheme.typography.labelLarge)
+                                Text(tr("UI toolkit"), style = MaterialTheme.typography.labelLarge)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    PillChip("Jetpack Compose", selected = aiCompose, onClick = { aiCompose = true })
-                                    PillChip("Views (XML)", selected = !aiCompose, onClick = { aiCompose = false })
+                                    PillChip(tr("Jetpack Compose"), selected = aiCompose, onClick = { aiCompose = true })
+                                    PillChip(tr("Views (XML)"), selected = !aiCompose, onClick = { aiCompose = false })
                                 }
                             }
-                            Text("Language", style = MaterialTheme.typography.labelLarge)
+                            Text(tr("Language"), style = MaterialTheme.typography.labelLarge)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ProjectLanguage.entries.forEach { l ->
                                     val enabled = if (aiMode) !aiCompose || l == ProjectLanguage.Kotlin else template.supportsJava || l == ProjectLanguage.Kotlin
@@ -180,7 +181,7 @@ fun NewProjectWizard(
                                 onRegenerateFile = { path, instruction -> aiViewModel.regenerateFile(aiSpec, aiDescription, path, instruction) },
                             )
                         } else {
-                            Text("SDK levels", style = MaterialTheme.typography.titleMedium)
+                            Text(tr("SDK levels"), style = MaterialTheme.typography.titleMedium)
                             Text("Minimum SDK · API $minSdk", style = MaterialTheme.typography.labelLarge)
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 MinSdkChoices.forEach { api -> PillChip("$api", selected = api == minSdk, onClick = { minSdk = api; if (targetSdk < api) targetSdk = TargetSdkChoices.last() }) }
@@ -190,7 +191,7 @@ fun NewProjectWizard(
                                 TargetSdkChoices.forEach { api -> PillChip("$api", selected = api == targetSdk, onClick = if (api >= minSdk) ({ targetSdk = api }) else null) }
                             }
                             CodeinCard(Modifier.fillMaxWidth()) {
-                                Text("Summary", style = MaterialTheme.typography.labelLarge)
+                                Text(tr("Summary"), style = MaterialTheme.typography.labelLarge)
                                 Text("${template.displayName} · ${effectiveLanguage.displayName}", style = MaterialTheme.typography.bodyMedium)
                                 Text("$name ($packageName)", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
                                 Text("minSdk $minSdk · targetSdk $targetSdk · compileSdk $targetSdk", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
@@ -203,24 +204,24 @@ fun NewProjectWizard(
         }
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
             if (step > 0) {
-                OutlinedButton(onClick = { step-- }) { Text("Back") }
+                OutlinedButton(onClick = { step-- }) { Text(tr("Back")) }
                 Spacer(Modifier.width(8.dp))
             }
             if (step < 2) {
-                Button(onClick = { step++ }, enabled = step == 0 || (nameError == null && packageError == null)) { Text("Next") }
+                Button(onClick = { step++ }, enabled = step == 0 || (nameError == null && packageError == null)) { Text(tr("Next")) }
             } else if (aiMode) {
                 when (aiState) {
-                    is AiTemplateState.Generating -> OutlinedButton(onClick = aiViewModel::cancel) { Text("Stop") }
+                    is AiTemplateState.Generating -> OutlinedButton(onClick = aiViewModel::cancel) { Text(tr("Stop")) }
                     is AiTemplateState.Ready -> {
-                        OutlinedButton(onClick = { aiViewModel.generate(aiSpec, aiDescription) }) { Text("Regenerate") }
+                        OutlinedButton(onClick = { aiViewModel.generate(aiSpec, aiDescription) }) { Text(tr("Regenerate")) }
                         Spacer(Modifier.width(8.dp))
-                        Button(onClick = { aiViewModel.create(aiSpec, onCreated) }, enabled = nameError == null && packageError == null) { Text("Create project") }
+                        Button(onClick = { aiViewModel.create(aiSpec, onCreated) }, enabled = nameError == null && packageError == null) { Text(tr("Create project")) }
                     }
-                    AiTemplateState.Creating -> Button(onClick = {}, enabled = false) { Text("Creating…") }
+                    AiTemplateState.Creating -> Button(onClick = {}, enabled = false) { Text(tr("Creating…")) }
                     else -> Button(
                         onClick = { aiViewModel.generate(aiSpec, aiDescription) },
                         enabled = aiDescription.isNotBlank() && nameError == null && packageError == null,
-                    ) { Text("Generate") }
+                    ) { Text(tr("Generate")) }
                 }
             } else {
                 Button(

@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,12 +49,12 @@ fun GoToLineDialog(currentLine: Int, onDismiss: () -> Unit, onGo: (Int, Int) -> 
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Go to line") },
+        title = { Text(tr("Go to line")) },
         text = {
             OutlinedTextField(
                 value = value,
                 onValueChange = { value = it },
-                label = { Text("Line or line:column") },
+                label = { Text(tr("Line or line:column")) },
                 singleLine = true,
                 isError = value.isNotBlank() && target == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
@@ -61,8 +62,8 @@ fun GoToLineDialog(currentLine: Int, onDismiss: () -> Unit, onGo: (Int, Int) -> 
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         },
-        confirmButton = { TextButton(onClick = { target?.let { onGo(it.first, it.second) } }, enabled = target != null) { Text("Go") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { target?.let { onGo(it.first, it.second) } }, enabled = target != null) { Text(tr("Go")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel")) } },
     )
 }
 
@@ -95,7 +96,7 @@ val KeyboardShortcuts: List<Pair<String, String>> = listOf(
 fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Keyboard shortcuts") },
+        title = { Text(tr("Keyboard shortcuts")) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 KeyboardShortcuts.forEach { (keys, action) ->
@@ -106,7 +107,7 @@ fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(tr("Close")) } },
     )
 }
 
@@ -126,7 +127,7 @@ fun RenameSymbolDialog(rename: RenameSymbolUi, onIntent: (WorkspaceIntent) -> Un
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
-                    label = { Text("New name") },
+                    label = { Text(tr("New name")) },
                     singleLine = true,
                     isError = value.isNotBlank() && !Regex("[A-Za-z_][A-Za-z0-9_]*").matches(value.trim()),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, autoCorrectEnabled = false),
@@ -149,16 +150,15 @@ fun RenameSymbolDialog(rename: RenameSymbolUi, onIntent: (WorkspaceIntent) -> Un
                         }
                     }
                 }
-                Text(
-                    "Matches whole words with the same case, including comments and strings. Each file's old text is kept in local history.",
+                Text(tr("Matches whole words with the same case, including comments and strings. Each file's old text is kept in local history."),
                     style = MaterialTheme.typography.labelSmall,
                     color = CodeinTheme.colors.textMuted,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onIntent(WorkspaceIntent.RenameSymbol(value)) }, enabled = valid && uses != null && uses.totalHits > 0) { Text("Rename") }
+            TextButton(onClick = { onIntent(WorkspaceIntent.RenameSymbol(value)) }, enabled = valid && uses != null && uses.totalHits > 0) { Text(tr("Rename")) }
         },
-        dismissButton = { TextButton(onClick = { onIntent(WorkspaceIntent.CancelRenameSymbol) }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { onIntent(WorkspaceIntent.CancelRenameSymbol) }) { Text(tr("Cancel")) } },
     )
 }

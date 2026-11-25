@@ -1,5 +1,6 @@
 package com.codein.ide.maven.ui
 
+import com.codein.ide.core.ui.i18n.tr
 import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.core.ui.components.CompactTextField
 import com.codein.ide.core.ui.components.SegmentedTabs
@@ -66,8 +67,8 @@ fun DependencyExplorerScreen(
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     Column(modifier.fillMaxSize()) {
-        PanelHeader(title = "Maven Dependencies", icon = CodeinIcons.Package) {
-            ToolbarIconButton(CodeinIcons.Refresh, "Resolve dependency tree", size = 32.dp) { onIntent(DependencyExplorerIntent.ResolveTree) }
+        PanelHeader(title = tr("Maven Dependencies"), icon = CodeinIcons.Package) {
+            ToolbarIconButton(CodeinIcons.Refresh, tr("Resolve dependency tree"), size = 32.dp) { onIntent(DependencyExplorerIntent.ResolveTree) }
         }
         SegmentedTabs(
             items = listOf(0, 1),
@@ -90,7 +91,7 @@ private fun SearchTab(state: DependencyExplorerState, onIntent: (DependencyExplo
         CompactTextField(
             value = state.query,
             onValueChange = { onIntent(DependencyExplorerIntent.QueryChanged(it)) },
-            placeholder = "Search by name: retrofit, glide, room, image loading…",
+            placeholder = tr("Search by name: retrofit, glide, room, image loading…"),
             leadingIcon = CodeinIcons.Search,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
         )
@@ -184,7 +185,7 @@ private fun SearchHitCard(
                                 TextButton(onClick = { onAdd(v, configuration) }, enabled = canAdd) {
                                     Icon(CodeinIcons.Plus, null, Modifier.size(14.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Add", style = MaterialTheme.typography.labelMedium)
+                                    Text(tr("Add"), style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                         }

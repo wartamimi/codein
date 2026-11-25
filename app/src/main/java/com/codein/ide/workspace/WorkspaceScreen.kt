@@ -1,5 +1,8 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.prefs.UiPrefs
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
@@ -357,8 +360,13 @@ fun WorkspaceScreen(
             },
     ) {
         val sizeClass = WindowSizeClass.calculateFromSize(DpSize(maxWidth, maxHeight))
+        val screenWidth = maxWidth
         val split = sizeClass.widthSizeClass != WindowWidthSizeClass.Compact
-        val aiVisible = split && (aiPaneVisible ?: (sizeClass.widthSizeClass == WindowWidthSizeClass.Expanded))
+        // A phone turned sideways: wide but short. Panels start hidden and the bars are compact so
+        // the editor keeps most of the ~360dp height.
+        val landscapePhone = split && sizeClass.heightSizeClass == WindowHeightSizeClass.Compact
+        val oneHanded by UiPrefs.oneHanded.collectAsStateWithLifecycle()
+        val aiVisible = split && (aiPaneVisible ?: (sizeClass.widthSizeClass == WindowWidthSizeClass.Expanded && !landscapePhone))
         val consoleTabs = if (split) listOf(DockTab.Build, DockTab.Logcat, DockTab.Terminal) else listOf(DockTab.Build, DockTab.Logcat, DockTab.Terminal, DockTab.Ai)
 
         // The view model still speaks in dock tabs. Search / Git / Maven live in the sidebar, and on
@@ -473,20 +481,21 @@ fun WorkspaceScreen(
                         available = available,
                         onIntent = onIntent,
                         content = dockContent,
+                        halfFraction = if (landscapePhone) 0.7f else Sizes.DockHalf,
                     )
                 }
             }
         }
 
         if (split) {
-            var sidebarVisible by rememberSaveable { mutableStateOf(true) }
+            var sidebarVisible by rememberSaveable(landscapePhone) { mutableStateOf(!landscapePhone) }
             var explorerWidth by rememberSaveable { mutableStateOf(Sizes.ExplorerPane.value) }
             var aiWidth by rememberSaveable { mutableStateOf(Sizes.AiPane.value) }
             LaunchedEffect(sidebarRequest) { if (sidebarRequest > 0) sidebarVisible = true }
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
                 TopStudioBar(
                     state = state,
-                    compact = false,
+                    compact = landscapePhone,
                     aiVisible = aiVisible,
                     showAiToggle = true,
                     onToggleSidebar = { sidebarVisible = !sidebarVisible },
@@ -519,7 +528,8 @@ fun WorkspaceScreen(
                     ) {
                         Row {
                             PaneDivider { delta -> aiWidth = (aiWidth - delta).coerceIn(280f, 520f) }
-                            Box(Modifier.width(aiWidth.dp).fillMaxHeight().background(CodeinTheme.colors.tier1)) {
+                            val paneWidth = if (landscapePhone) minOf(aiWidth.dp, screenWidth * 0.45f) else aiWidth.dp
+                            Box(Modifier.width(paneWidth).fillMaxHeight().background(CodeinTheme.colors.tier1)) {
                                 dockContent(DockTab.Ai, Modifier.fillMaxSize())
                             }
                         }
@@ -546,20 +556,26 @@ fun WorkspaceScreen(
                 },
             ) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-                    TopStudioBar(
-                        state = state,
-                        compact = true,
-                        aiVisible = false,
-                        showAiToggle = false,
-                        onToggleSidebar = { scope.launch { drawerState.open() } },
-                        onIntent = onIntent,
-                        onToggleAi = {},
-                        menu = menu,
-                    )
+                    val studioBar: @Composable () -> Unit = {
+                        TopStudioBar(
+                            state = state,
+                            compact = true,
+                            aiVisible = false,
+                            showAiToggle = false,
+                            onToggleSidebar = { scope.launch { drawerState.open() } },
+                            onIntent = onIntent,
+                            onToggleAi = {},
+                            menu = menu,
+                        )
+                    }
+                    // One-handed mode: the toolbar (files, build, run, menu) sits at the bottom, in
+                    // thumb reach, between the editor and the dock.
+                    if (!oneHanded) studioBar()
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                         val available = maxHeight
                         Column(Modifier.fillMaxSize()) {
                             editorArea(Modifier.weight(1f))
+                            if (oneHanded) studioBar()
                             bottom(available)
                         }
                     }
@@ -748,11 +764,11 @@ private fun EditorArea(
             if (active == null) {
                 EmptyState(
                     icon = CodeinIcons.Code,
-                    title = "No file open",
-                    message = "Open a file from the explorer, or press Ctrl+P to jump to any file or command.",
+                    title = tr("No file open"),
+                    message = tr("Open a file from the explorer, or press Ctrl+P to jump to any file or command."),
                     modifier = Modifier.align(Alignment.Center),
                 ) {
-                    TextButton(onClick = onOpenPalette) { Text("Quick open") }
+                    TextButton(onClick = onOpenPalette) { Text(tr("Quick open")) }
                 }
             } else {
                 val drawable = isDrawableXml(active.relativePath)
@@ -852,6 +868,7 @@ private fun DeveloperDock(
     available: Dp,
     onIntent: (WorkspaceIntent) -> Unit,
     content: @Composable (DockTab, Modifier) -> Unit,
+    halfFraction: Float = Sizes.DockHalf,
 ) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
@@ -864,7 +881,7 @@ private fun DeveloperDock(
     val availablePx = with(density) { available.toPx() }.coerceAtLeast(collapsedPx)
     fun heightFor(d: DockDetent): Float = when (d) {
         DockDetent.Collapsed -> collapsedPx
-        DockDetent.Half -> (availablePx * Sizes.DockHalf).coerceAtLeast(collapsedPx)
+        DockDetent.Half -> (availablePx * halfFraction).coerceAtLeast(collapsedPx)
         DockDetent.Expanded -> (availablePx * Sizes.DockFull).coerceAtLeast(collapsedPx)
     }
     val height = remember { Animatable(heightFor(detent)) }
@@ -953,7 +970,7 @@ private fun DockHeader(
             modifier = Modifier.weight(1f).padding(top = Spacing.xs),
         )
         ToolbarIconButton(if (expanded) CodeinIcons.ChevronDown else CodeinIcons.ChevronUp, if (expanded) "Half height" else "Expand panel", size = 28.dp, onClick = onToggleExpand)
-        ToolbarIconButton(CodeinIcons.Minus, "Collapse panel", size = 28.dp, onClick = onCollapse)
+        ToolbarIconButton(CodeinIcons.Minus, tr("Collapse panel"), size = 28.dp, onClick = onCollapse)
     }
 }
 
@@ -1081,28 +1098,28 @@ private fun rememberPaletteItems(
                 add(PaletteItem("f:$rel", rel.substringAfterLast('/'), rel.substringBeforeLast('/', ""), PaletteCategory.File, fileName = rel.substringAfterLast('/')) { onIntent(WorkspaceIntent.OpenFile(rel)) })
             }
             add(PaletteItem("a:build", "Build & Run", state.build.variant.displayName, PaletteCategory.Action, CodeinIcons.Play, shortcut = "Ctrl+B") { onIntent(WorkspaceIntent.Build) })
-            add(PaletteItem("a:save", "Save all", "", PaletteCategory.Action, CodeinIcons.Save, shortcut = "Ctrl+Shift+S") { onIntent(WorkspaceIntent.SaveAll) })
-            add(PaletteItem("a:symbols", "Go to symbol in file", "Type # in the palette", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+O") { onIntent(WorkspaceIntent.SetPalette(true, "#")) })
-            add(PaletteItem("a:find", "Find in file", "", PaletteCategory.Action, CodeinIcons.Search, shortcut = "Ctrl+F") { onIntent(WorkspaceIntent.OpenFind) })
-            add(PaletteItem("a:search", "Search in project", "", PaletteCategory.Action, CodeinIcons.Regex, shortcut = "Ctrl+Shift+F") { onIntent(WorkspaceIntent.ShowDock(DockTab.Search)) })
-            add(PaletteItem("a:ai", "Open Codein AI", "", PaletteCategory.Action, CodeinIcons.Sparkle) { toggleAi() })
-            add(PaletteItem("a:logcat", "Show Logcat", "", PaletteCategory.Action, CodeinIcons.ScrollLock) { onIntent(WorkspaceIntent.ShowDock(DockTab.Logcat)) })
-            add(PaletteItem("a:terminal", "Show Terminal", "Android shell in the project folder", PaletteCategory.Action, CodeinIcons.Terminal) { onIntent(WorkspaceIntent.ShowDock(DockTab.Terminal)) })
-            add(PaletteItem("a:git", "Source control", "", PaletteCategory.Action, CodeinIcons.GitBranch) { onIntent(WorkspaceIntent.ShowDock(DockTab.Git)) })
-            add(PaletteItem("a:deps", "Manage Maven dependencies", "", PaletteCategory.Action, CodeinIcons.Package) { onIntent(WorkspaceIntent.ShowDock(DockTab.Dependencies)) })
+            add(PaletteItem("a:save", tr("Save all"), "", PaletteCategory.Action, CodeinIcons.Save, shortcut = "Ctrl+Shift+S") { onIntent(WorkspaceIntent.SaveAll) })
+            add(PaletteItem("a:symbols", tr("Go to symbol in file"), tr("Type # in the palette"), PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+O") { onIntent(WorkspaceIntent.SetPalette(true, "#")) })
+            add(PaletteItem("a:find", tr("Find in file"), "", PaletteCategory.Action, CodeinIcons.Search, shortcut = "Ctrl+F") { onIntent(WorkspaceIntent.OpenFind) })
+            add(PaletteItem("a:search", tr("Search in project"), "", PaletteCategory.Action, CodeinIcons.Regex, shortcut = "Ctrl+Shift+F") { onIntent(WorkspaceIntent.ShowDock(DockTab.Search)) })
+            add(PaletteItem("a:ai", tr("Open Codein AI"), "", PaletteCategory.Action, CodeinIcons.Sparkle) { toggleAi() })
+            add(PaletteItem("a:logcat", tr("Show Logcat"), "", PaletteCategory.Action, CodeinIcons.ScrollLock) { onIntent(WorkspaceIntent.ShowDock(DockTab.Logcat)) })
+            add(PaletteItem("a:terminal", tr("Show Terminal"), tr("Android shell in the project folder"), PaletteCategory.Action, CodeinIcons.Terminal) { onIntent(WorkspaceIntent.ShowDock(DockTab.Terminal)) })
+            add(PaletteItem("a:git", tr("Source control"), "", PaletteCategory.Action, CodeinIcons.GitBranch) { onIntent(WorkspaceIntent.ShowDock(DockTab.Git)) })
+            add(PaletteItem("a:deps", tr("Manage Maven dependencies"), "", PaletteCategory.Action, CodeinIcons.Package) { onIntent(WorkspaceIntent.ShowDock(DockTab.Dependencies)) })
             state.activeFile?.let { f ->
                 add(PaletteItem("a:history", "Local history of ${f.name}", "Earlier versions Codein kept", PaletteCategory.Action, CodeinIcons.History) { onIntent(WorkspaceIntent.ShowHistory(f.relativePath)) })
             }
-            add(PaletteItem("a:rename", "Rename symbol…", "Rename the name at the cursor in every file", PaletteCategory.Action, CodeinIcons.Type, shortcut = "F2") { onIntent(WorkspaceIntent.StartRenameSymbol) })
-            add(PaletteItem("a:format", "Format document", "Re-indent and tidy the open file", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+Alt+L") { onIntent(WorkspaceIntent.FormatDocument) })
-            add(PaletteItem("a:goto", "Go to line…", "", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+G") { onGoToLine() })
-            add(PaletteItem("a:keys", "Keyboard shortcuts", "For a physical keyboard", PaletteCategory.Action, CodeinIcons.Type) { onShortcuts() })
-            add(PaletteItem("a:zip", "Export project as ZIP", "Share or back up the source (no build outputs)", PaletteCategory.Action, CodeinIcons.Archive) { onIntent(WorkspaceIntent.ExportZip) })
-            add(PaletteItem("a:collapse", "Collapse all folders", "", PaletteCategory.Action, CodeinIcons.CollapseAll) { onIntent(WorkspaceIntent.CollapseAll) })
-            add(PaletteItem("a:signing", "Signing & AAB export", "Keystores, SHA fingerprints, signed .aab", PaletteCategory.Build, CodeinIcons.Key) { onOpenSigning() })
-            add(PaletteItem("a:new", "New project", "", PaletteCategory.Action, CodeinIcons.Plus) { onNewProject() })
-            add(PaletteItem("a:prefs", "Editor appearance", "Font, size, line height, theme", PaletteCategory.Appearance, CodeinIcons.Palette) { onIntent(WorkspaceIntent.SetPreferences(true)) })
-            add(PaletteItem("a:settings", "Settings & toolchain", "", PaletteCategory.Action, CodeinIcons.Settings) { onOpenSettings() })
+            add(PaletteItem("a:rename", tr("Rename symbol…"), tr("Rename the name at the cursor in every file"), PaletteCategory.Action, CodeinIcons.Type, shortcut = "F2") { onIntent(WorkspaceIntent.StartRenameSymbol) })
+            add(PaletteItem("a:format", tr("Format document"), tr("Re-indent and tidy the open file"), PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+Alt+L") { onIntent(WorkspaceIntent.FormatDocument) })
+            add(PaletteItem("a:goto", tr("Go to line…"), "", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+G") { onGoToLine() })
+            add(PaletteItem("a:keys", tr("Keyboard shortcuts"), tr("For a physical keyboard"), PaletteCategory.Action, CodeinIcons.Type) { onShortcuts() })
+            add(PaletteItem("a:zip", tr("Export project as ZIP"), tr("Share or back up the source (no build outputs)"), PaletteCategory.Action, CodeinIcons.Archive) { onIntent(WorkspaceIntent.ExportZip) })
+            add(PaletteItem("a:collapse", tr("Collapse all folders"), "", PaletteCategory.Action, CodeinIcons.CollapseAll) { onIntent(WorkspaceIntent.CollapseAll) })
+            add(PaletteItem("a:signing", tr("Signing & AAB export"), tr("Keystores, SHA fingerprints, signed .aab"), PaletteCategory.Build, CodeinIcons.Key) { onOpenSigning() })
+            add(PaletteItem("a:new", tr("New project"), "", PaletteCategory.Action, CodeinIcons.Plus) { onNewProject() })
+            add(PaletteItem("a:prefs", tr("Editor appearance"), tr("Font, size, line height, theme"), PaletteCategory.Appearance, CodeinIcons.Palette) { onIntent(WorkspaceIntent.SetPreferences(true)) })
+            add(PaletteItem("a:settings", tr("Settings & toolchain"), "", PaletteCategory.Action, CodeinIcons.Settings) { onOpenSettings() })
             BuildVariant.entries.forEach { v ->
                 add(PaletteItem("g:${v.name}", "Build target: ${shortVariant(v)}", v.displayName, PaletteCategory.Gradle, CodeinIcons.Layers) { onIntent(WorkspaceIntent.SetVariant(v)) })
                 add(PaletteItem("g:run:${v.name}", "assemble ${v.displayName}", "Switch target and build", PaletteCategory.Gradle, CodeinIcons.Hammer) {

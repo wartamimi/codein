@@ -1,5 +1,6 @@
 package com.codein.ide.vcs.ui
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.ui.window.DialogProperties
@@ -71,13 +72,13 @@ fun GitPanel(state: GitPanelState, onIntent: (GitIntent) -> Unit, onOpenFile: (S
     var showCredentials by remember { mutableStateOf(false) }
     var showNewBranch by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
-        PanelHeader("Source control", icon = CodeinIcons.GitBranch) {
+        PanelHeader(tr("Source control"), icon = CodeinIcons.GitBranch) {
             if (state.status.isRepository) {
-                ToolbarIconButton(CodeinIcons.GitPull, "Pull", size = 32.dp, enabled = state.busy == null && state.status.remoteUrl != null) { onIntent(GitIntent.Pull) }
-                ToolbarIconButton(CodeinIcons.GitPush, "Push", size = 32.dp, enabled = state.busy == null && state.status.remoteUrl != null && state.status.hasCommits) { onIntent(GitIntent.Push) }
+                ToolbarIconButton(CodeinIcons.GitPull, tr("Pull"), size = 32.dp, enabled = state.busy == null && state.status.remoteUrl != null) { onIntent(GitIntent.Pull) }
+                ToolbarIconButton(CodeinIcons.GitPush, tr("Push"), size = 32.dp, enabled = state.busy == null && state.status.remoteUrl != null && state.status.hasCommits) { onIntent(GitIntent.Push) }
             }
-            ToolbarIconButton(CodeinIcons.Key, "Credentials", size = 32.dp) { showCredentials = true }
-            ToolbarIconButton(CodeinIcons.Refresh, "Refresh", size = 32.dp) { onIntent(GitIntent.Refresh) }
+            ToolbarIconButton(CodeinIcons.Key, tr("Credentials"), size = 32.dp) { showCredentials = true }
+            ToolbarIconButton(CodeinIcons.Refresh, tr("Refresh"), size = 32.dp) { onIntent(GitIntent.Refresh) }
         }
         if (state.busy != null) {
             LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
@@ -87,11 +88,11 @@ fun GitPanel(state: GitPanelState, onIntent: (GitIntent) -> Unit, onOpenFile: (S
         if (!state.status.isRepository) {
             EmptyState(
                 icon = CodeinIcons.GitBranch,
-                title = "No Git repository",
-                message = "Initialize a repository to track changes, commit and push to GitHub, GitLab or any HTTPS remote.",
+                title = tr("No Git repository"),
+                message = tr("Initialize a repository to track changes, commit and push to GitHub, GitLab or any HTTPS remote."),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Button(onClick = { onIntent(GitIntent.Init) }, enabled = state.busy == null) { Text("Initialize repository") }
+                Button(onClick = { onIntent(GitIntent.Init) }, enabled = state.busy == null) { Text(tr("Initialize repository")) }
             }
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
@@ -99,13 +100,13 @@ fun GitPanel(state: GitPanelState, onIntent: (GitIntent) -> Unit, onOpenFile: (S
                 item { CommitBox(state, onIntent) }
                 item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Changes", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                        Text(tr("Changes"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                         CountBadge(state.status.files.size.toString(), MaterialTheme.colorScheme.primary)
-                        if (state.status.files.isNotEmpty()) TextButton(onClick = { onIntent(GitIntent.StageAll) }) { Text("Stage all") }
+                        if (state.status.files.isNotEmpty()) TextButton(onClick = { onIntent(GitIntent.StageAll) }) { Text(tr("Stage all")) }
                     }
                 }
                 if (state.status.isClean) {
-                    item { Text("Working tree clean", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
+                    item { Text(tr("Working tree clean"), style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
                 }
                 items(state.status.files.entries.toList(), key = { it.key }) { (path, status) ->
                     ChangeRow(
@@ -121,7 +122,7 @@ fun GitPanel(state: GitPanelState, onIntent: (GitIntent) -> Unit, onOpenFile: (S
                     if (path == state.selectedDiffPath) DiffView(state.diffText)
                 }
                 if (state.log.isNotEmpty()) {
-                    item { Text("History", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 12.dp, top = 14.dp, bottom = 4.dp)) }
+                    item { Text(tr("History"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 12.dp, top = 14.dp, bottom = 4.dp)) }
                     items(state.log, key = { "c" + it.id }) { commit ->
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(CodeinIcons.GitCommit, null, tint = CodeinTheme.colors.textMuted, modifier = Modifier.size(16.dp))
@@ -171,7 +172,7 @@ private fun BranchRow(state: GitPanelState, onIntent: (GitIntent) -> Unit, onNew
                         leadingIcon = { if (b.isCurrent) Icon(CodeinIcons.Check, null, modifier = Modifier.size(16.dp)) },
                     )
                 }
-                DropdownMenuItem(text = { Text("New branch…") }, onClick = { menu = false; onNewBranch() }, leadingIcon = { Icon(CodeinIcons.Plus, null, modifier = Modifier.size(16.dp)) })
+                DropdownMenuItem(text = { Text(tr("New branch…")) }, onClick = { menu = false; onNewBranch() }, leadingIcon = { Icon(CodeinIcons.Plus, null, modifier = Modifier.size(16.dp)) })
             }
         }
         if (state.status.ahead > 0) CountBadge("↑${state.status.ahead}", CodeinTheme.colors.success)
@@ -190,15 +191,15 @@ private fun CommitBox(state: GitPanelState, onIntent: (GitIntent) -> Unit) {
         OutlinedTextField(
             value = state.commitMessage,
             onValueChange = { onIntent(GitIntent.CommitMessage(it)) },
-            placeholder = { Text("Commit message") },
+            placeholder = { Text(tr("Commit message")) },
             minLines = 2,
             maxLines = 5,
             modifier = Modifier.fillMaxWidth(),
         )
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val canCommit = state.commitMessage.isNotBlank() && state.busy == null
-            Button(onClick = { onIntent(GitIntent.ReviewCommit(stageAll = false)) }, enabled = canCommit && state.status.staged.isNotEmpty()) { Text("Review & commit staged") }
-            TextButton(onClick = { onIntent(GitIntent.ReviewCommit(stageAll = true)) }, enabled = canCommit && state.status.files.isNotEmpty()) { Text("Commit all…") }
+            Button(onClick = { onIntent(GitIntent.ReviewCommit(stageAll = false)) }, enabled = canCommit && state.status.staged.isNotEmpty()) { Text(tr("Review & commit staged")) }
+            TextButton(onClick = { onIntent(GitIntent.ReviewCommit(stageAll = true)) }, enabled = canCommit && state.status.files.isNotEmpty()) { Text(tr("Commit all…")) }
         }
     }
 }
@@ -232,17 +233,17 @@ private fun ChangeRow(
                 Text(path.substringBeforeLast('/'), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        ToolbarIconButton(CodeinIcons.File, "Open file", size = 30.dp, onClick = onOpen)
-        ToolbarIconButton(CodeinIcons.Undo, "Discard changes", size = 30.dp) { confirmDiscard = true }
+        ToolbarIconButton(CodeinIcons.File, tr("Open file"), size = 30.dp, onClick = onOpen)
+        ToolbarIconButton(CodeinIcons.Undo, tr("Discard changes"), size = 30.dp) { confirmDiscard = true }
         GitStatusBadge(status, Modifier.padding(end = 6.dp))
     }
     if (confirmDiscard) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
-            title = { Text("Discard changes?") },
+            title = { Text(tr("Discard changes?")) },
             text = { Text("This restores $path to the last commit (or deletes it if untracked). It cannot be undone.") },
-            confirmButton = { TextButton(onClick = { confirmDiscard = false; onDiscard() }) { Text("Discard", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { confirmDiscard = false; onDiscard() }) { Text(tr("Discard"), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(tr("Cancel")) } },
         )
     }
 }
@@ -254,8 +255,8 @@ private fun CommitReviewDialog(review: CommitReview, message: String, onIntent: 
     Dialog(onDismissRequest = { onIntent(GitIntent.CancelReview) }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
-                PanelHeader("Review commit", icon = CodeinIcons.GitCommit) {
-                    ToolbarIconButton(CodeinIcons.Close, "Cancel", size = 32.dp) { onIntent(GitIntent.CancelReview) }
+                PanelHeader(tr("Review commit"), icon = CodeinIcons.GitCommit) {
+                    ToolbarIconButton(CodeinIcons.Close, tr("Cancel"), size = 32.dp) { onIntent(GitIntent.CancelReview) }
                 }
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text(message.trim(), style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -289,7 +290,7 @@ private fun CommitReviewDialog(review: CommitReview, message: String, onIntent: 
                 }
                 Hairline()
                 Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    TextButton(onClick = { onIntent(GitIntent.CancelReview) }) { Text("Back") }
+                    TextButton(onClick = { onIntent(GitIntent.CancelReview) }) { Text(tr("Back")) }
                     Button(onClick = { onIntent(GitIntent.Commit(review.stageAll)) }, enabled = review.files.isNotEmpty()) {
                         Text("Commit ${review.files.size} file(s)")
                     }
@@ -315,7 +316,7 @@ fun DiffView(diff: String) {
             .horizontalScroll(rememberScrollState())
             .padding(vertical = 6.dp),
     ) {
-        if (diff.isBlank()) Text("No textual changes", style = style, color = CodeinTheme.colors.textMuted, modifier = Modifier.padding(horizontal = 10.dp))
+        if (diff.isBlank()) Text(tr("No textual changes"), style = style, color = CodeinTheme.colors.textMuted, modifier = Modifier.padding(horizontal = 10.dp))
         diff.lineSequence().take(800).forEach { line ->
             val color = when {
                 line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ") -> CodeinTheme.colors.textMuted
@@ -343,8 +344,8 @@ private fun SingleFieldDialog(title: String, initial: String, placeholder: Strin
         text = {
             OutlinedTextField(value, { value = it }, singleLine = true, placeholder = { Text(placeholder) }, keyboardOptions = KeyboardOptions(keyboardType = keyboard))
         },
-        confirmButton = { TextButton(onClick = { onConfirm(value) }, enabled = value.isNotBlank()) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onConfirm(value) }, enabled = value.isNotBlank()) { Text(tr("Save")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel")) } },
     )
 }
 
@@ -363,12 +364,12 @@ private fun CredentialsDialog(
     var email by rememberSaveable { mutableStateOf(c.authorEmail) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Git identity & credentials") },
+        title = { Text(tr("Git identity & credentials")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Author name") }, singleLine = true)
-                OutlinedTextField(email, { email = it }, label = { Text("Author email") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
-                OutlinedTextField(user, { user = it }, label = { Text("HTTPS username") }, singleLine = true)
+                OutlinedTextField(name, { name = it }, label = { Text(tr("Author name")) }, singleLine = true)
+                OutlinedTextField(email, { email = it }, label = { Text(tr("Author email")) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                OutlinedTextField(user, { user = it }, label = { Text(tr("HTTPS username")) }, singleLine = true)
                 OutlinedTextField(
                     token,
                     { token = it },
@@ -376,13 +377,13 @@ private fun CredentialsDialog(
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                 )
-                Text("Tokens are encrypted with the Android Keystore.", style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
+                Text(tr("Tokens are encrypted with the Android Keystore."), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
                 Hairline()
-                Text("SSH key (for git@host:user/repo.git remotes)", style = MaterialTheme.typography.titleSmall)
+                Text(tr("SSH key (for git@host:user/repo.git remotes)"), style = MaterialTheme.typography.titleSmall)
                 val publicKey = state.sshPublicKey
                 if (publicKey == null) {
-                    Text("No key yet. Codein generates an RSA-3072 key stored privately on this device.", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
-                    Button(onClick = { onSsh(GitIntent.GenerateSshKey) }, enabled = state.busy == null) { Text("Generate SSH key") }
+                    Text(tr("No key yet. Codein generates an RSA-3072 key stored privately on this device."), style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+                    Button(onClick = { onSsh(GitIntent.GenerateSshKey) }, enabled = state.busy == null) { Text(tr("Generate SSH key")) }
                 } else {
                     Text(
                         publicKey,
@@ -391,16 +392,16 @@ private fun CredentialsDialog(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(8.dp),
                     )
-                    Text("Add this public key to GitHub (Settings > SSH and GPG keys) or your Git host.", style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
+                    Text(tr("Add this public key to GitHub (Settings > SSH and GPG keys) or your Git host."), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { clipboard.setText(AnnotatedString(publicKey)) }) { Text("Copy key") }
-                        TextButton(onClick = { onSsh(GitIntent.ClearKnownHosts) }) { Text("Forget hosts") }
-                        TextButton(onClick = { onSsh(GitIntent.DeleteSshKey) }) { Text("Delete") }
+                        Button(onClick = { clipboard.setText(AnnotatedString(publicKey)) }) { Text(tr("Copy key")) }
+                        TextButton(onClick = { onSsh(GitIntent.ClearKnownHosts) }) { Text(tr("Forget hosts")) }
+                        TextButton(onClick = { onSsh(GitIntent.DeleteSshKey) }) { Text(tr("Delete")) }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(user, token.ifEmpty { null }, name, email) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onSave(user, token.ifEmpty { null }, name, email) }) { Text(tr("Save")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel")) } },
     )
 }

@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -123,8 +124,8 @@ fun TopStudioBar(
                 onCancel = { onIntent(WorkspaceIntent.CancelBuild) },
                 compact = compact,
             )
-            ToolbarIconButton(CodeinIcons.Search, "Command palette (Ctrl+P)") { onIntent(WorkspaceIntent.SetPalette(true)) }
-            if (showAiToggle) ToolbarIconButton(CodeinIcons.Sparkle, "Codein AI", active = aiVisible, onClick = onToggleAi)
+            ToolbarIconButton(CodeinIcons.Search, tr("Command palette (Ctrl+P)")) { onIntent(WorkspaceIntent.SetPalette(true)) }
+            if (showAiToggle) ToolbarIconButton(CodeinIcons.Sparkle, tr("Codein AI"), active = aiVisible, onClick = onToggleAi)
             OverflowMenu(menu, onSaveAll = { onIntent(WorkspaceIntent.SaveAll) })
         }
         HairlineDivider()
@@ -212,7 +213,7 @@ private fun BuildTargetChip(variant: BuildVariant, compact: Boolean, onSelect: (
 private fun OverflowMenu(menu: StudioMenuActions, onSaveAll: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        ToolbarIconButton(CodeinIcons.MoreVertical, "More actions") { open = true }
+        ToolbarIconButton(CodeinIcons.MoreVertical, tr("More actions")) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = CodeinTheme.colors.tier2) {
             MenuItem("Signing & AAB export", CodeinIcons.Key) { open = false; menu.onSigning() }
             MenuItem("Editor settings", CodeinIcons.Palette) { open = false; menu.onEditorSettings() }
@@ -368,7 +369,7 @@ fun Breadcrumbs(relativePath: String?, dirty: Boolean) {
                 }
             }
         }
-        if (dirty) Text("Unsaved", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        if (dirty) Text(tr("Unsaved"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 

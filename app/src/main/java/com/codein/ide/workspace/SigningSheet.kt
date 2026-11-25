@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -87,7 +88,7 @@ fun SigningSheet(
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
     ) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.88f).navigationBarsPadding()) {
-            Text("Signing & release", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = Spacing.lg))
+            Text(tr("Signing & release"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = Spacing.lg))
             SegmentedTabs(
                 items = SigningTab.entries.toList(),
                 selected = tab,
@@ -144,11 +145,11 @@ private fun ExportTab(
             if (releaseKey != null) {
                 Text("SHA-256  ${releaseKey.fingerprints.sha256}", style = com.codein.ide.core.ui.theme.metricsTextStyle(CodeinTheme.editorPreferences.codingFont, 10.5f), color = CodeinTheme.colors.textMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             } else {
-                PillChip("Create a release keystore", icon = CodeinIcons.Plus, selected = true, onClick = onCreateKey)
+                PillChip(tr("Create a release keystore"), icon = CodeinIcons.Plus, selected = true, onClick = onCreateKey)
             }
         }
 
-        Text("Output", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(tr("Output"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         BuildVariant.entries.forEach { v ->
             CodeinCard(Modifier.fillMaxWidth(), selected = build.variant == v, onClick = { onIntent(WorkspaceIntent.SetVariant(v)) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -192,8 +193,8 @@ private fun ExportTab(
                 accent = CodeinTheme.colors.success,
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    if (!result.variant.producesBundle) PillChip("Install", icon = CodeinIcons.Download, onClick = { onIntent(WorkspaceIntent.InstallOutput) })
-                    PillChip("Share", icon = CodeinIcons.Share, onClick = { onIntent(WorkspaceIntent.ShareOutput) })
+                    if (!result.variant.producesBundle) PillChip(tr("Install"), icon = CodeinIcons.Download, onClick = { onIntent(WorkspaceIntent.InstallOutput) })
+                    PillChip(tr("Share"), icon = CodeinIcons.Share, onClick = { onIntent(WorkspaceIntent.ShareOutput) })
                 }
             }
         }
@@ -222,7 +223,7 @@ private fun ExportAabCard(enabled: Boolean, running: Boolean, build: BuildUiStat
             ) { Icon(CodeinIcons.Export, null, tint = accent, modifier = Modifier.size(Sizes.IconLg)) }
             Spacer(Modifier.width(Spacing.md))
             Column(Modifier.weight(1f)) {
-                Text("Export Signed .AAB", style = MaterialTheme.typography.titleMedium)
+                Text(tr("Export Signed .AAB"), style = MaterialTheme.typography.titleMedium)
                 Text(
                     if (enabled || running) "Maven → AAPT2 → ECJ → D8 → Bundletool, signed with your release key."
                     else "Select a release key in Debug & Release Keys first.",
