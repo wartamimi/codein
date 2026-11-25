@@ -1,6 +1,14 @@
 package com.codein.ide
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
 import android.os.ParcelFileDescriptor
+import androidx.core.content.ContextCompat
+import java.util.concurrent.CountDownLatch
 import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
@@ -155,11 +163,9 @@ class OnDeviceToolchainTest {
             ParcelFileDescriptor.AutoCloseOutputStream(input).use { out -> apk.inputStream().use { it.copyTo(out) } }
             ParcelFileDescriptor.AutoCloseInputStream(output).bufferedReader().readText()
         } else {
-            // Before API 31 there is no stdin pipe; the shell user can read the app's external files.
-            val staged = File(context.getExternalFilesDir(null), "under-test.apk")
-            apk.copyTo(staged, overwrite = true)
-            shell("cp ${staged.absolutePath} /data/local/tmp/under-test.apk")
-            shell("pm install -r -t /data/local/tmp/under-test.apk")
+            // Before API 31 the shell has no stdin pipe, so install through PackageInstaller with
+            // the shell's INSTALL_PACKAGES permission adopted (no confirmation dialog).
+            installWithSession(apk)
         }
         Log.i(TAG, "pm install: $installLog")
         assertTrue("Install failed: $installLog", installLog.contains("Success"))
@@ -173,6 +179,48 @@ class OnDeviceToolchainTest {
         appLog.lines().takeLast(80).forEach { Log.i(TAG, "log| $it") }
         shell("am force-stop $packageName")
         assertTrue("Built app crashed:\n$crash\n$appLog", pid.isNotEmpty() && !crash.contains(packageName))
+    }
+
+    private fun installWithSession(apk: File): String {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.adoptShellPermissionIdentity(android.Manifest.permission.INSTALL_PACKAGES)
+        try {
+            val installer = context.packageManager.packageInstaller
+            val sessionId = installer.createSession(PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL))
+            val action = "${context.packageName}.TEST_INSTALL_$sessionId"
+            val done = CountDownLatch(1)
+            var result = "no result"
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(c: Context, intent: Intent) {
+                    val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+                    if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) return
+                    result = if (status == PackageInstaller.STATUS_SUCCESS) "Success" else "Failure $status: " + intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                    done.countDown()
+                }
+            }
+            ContextCompat.registerReceiver(context, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
+            try {
+                installer.openSession(sessionId).use { session ->
+                    session.openWrite("base.apk", 0, apk.length()).use { out ->
+                        apk.inputStream().use { it.copyTo(out) }
+                        session.fsync(out)
+                    }
+                    val callback = PendingIntent.getBroadcast(
+                        context,
+                        sessionId,
+                        Intent(action).setPackage(context.packageName),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                    )
+                    session.commit(callback.intentSender)
+                }
+                if (!done.await(180, TimeUnit.SECONDS)) result = "Timed out waiting for PackageInstaller"
+            } finally {
+                context.unregisterReceiver(receiver)
+            }
+            return result
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
     }
 
     private fun shell(command: String): String {
