@@ -52,7 +52,7 @@ data class BuildUiState(
     val currentStep: BuildStep? = null,
 )
 
-enum class DockTab(val title: String) { Build("Build"), Logcat("Logcat"), Ai("Codein AI"), Search("Search"), Git("Git"), Dependencies("Dependencies") }
+enum class DockTab(val title: String) { Build("Build"), Logcat("Logcat"), Terminal("Terminal"), Ai("Codein AI"), Search("Search"), Git("Git"), Dependencies("Dependencies") }
 
 data class WorkspaceState(
     val projectDir: File? = null,

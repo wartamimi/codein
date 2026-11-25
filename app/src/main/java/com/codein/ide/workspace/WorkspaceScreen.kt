@@ -84,6 +84,8 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codein.ide.ai.ui.AiAssistantPanel
+import com.codein.ide.terminal.TerminalPanel
+import com.codein.ide.terminal.TerminalViewModel
 import com.codein.ide.ai.ui.AiAssistantViewModel
 import com.codein.ide.compiler.gradle.GradleDependency
 import com.codein.ide.compiler.gradle.GradleScriptParser
@@ -171,6 +173,7 @@ fun WorkspaceScreen(
     aiViewModel: AiAssistantViewModel = hiltViewModel(),
     gitViewModel: GitViewModel = hiltViewModel(),
     logcatViewModel: LogcatViewModel = hiltViewModel(),
+    terminalViewModel: TerminalViewModel = hiltViewModel(),
     dependencyViewModel: DependencyExplorerViewModel = hiltViewModel(),
     vaultViewModel: KeystoreVaultViewModel = hiltViewModel(),
 ) {
@@ -252,7 +255,7 @@ fun WorkspaceScreen(
         val sizeClass = WindowSizeClass.calculateFromSize(DpSize(maxWidth, maxHeight))
         val split = sizeClass.widthSizeClass != WindowWidthSizeClass.Compact
         val aiVisible = split && (aiPaneVisible ?: (sizeClass.widthSizeClass == WindowWidthSizeClass.Expanded))
-        val consoleTabs = if (split) listOf(DockTab.Build, DockTab.Logcat) else listOf(DockTab.Build, DockTab.Logcat, DockTab.Ai)
+        val consoleTabs = if (split) listOf(DockTab.Build, DockTab.Logcat, DockTab.Terminal) else listOf(DockTab.Build, DockTab.Logcat, DockTab.Terminal, DockTab.Ai)
 
         // The view model still speaks in dock tabs. Search / Git / Maven live in the sidebar, and on
         // split layouts Codein AI lives in the right pane, so route those requests there while
@@ -293,6 +296,7 @@ fun WorkspaceScreen(
                     val logcat by logcatViewModel.state.collectAsStateWithLifecycle()
                     LogcatPanel(logcat, logcatViewModel::onIntent, logcatViewModel::start, logcatViewModel::stop, modifier, grantCommand = logcatViewModel.grantCommand)
                 }
+                DockTab.Terminal -> TerminalPanel(terminalViewModel, state.projectDir, modifier)
                 else -> {
                     val ai by aiViewModel.state.collectAsStateWithLifecycle()
                     AiAssistantPanel(ai, aiViewModel::onIntent, { onIntent(WorkspaceIntent.ApplyPatch(it)) }, { onIntent(WorkspaceIntent.InsertCode(it)) }, onOpenSettings, modifier)
@@ -802,7 +806,8 @@ private fun Counter(icon: androidx.compose.ui.graphics.vector.ImageVector, count
 
 private fun DockTab.icon() = when (this) {
     DockTab.Build -> CodeinIcons.Hammer
-    DockTab.Logcat -> CodeinIcons.Terminal
+    DockTab.Logcat -> CodeinIcons.ScrollLock
+    DockTab.Terminal -> CodeinIcons.Terminal
     DockTab.Ai -> CodeinIcons.Sparkle
     DockTab.Search -> CodeinIcons.Search
     DockTab.Git -> CodeinIcons.GitBranch
@@ -856,7 +861,8 @@ private fun rememberPaletteItems(
             add(PaletteItem("a:find", "Find in file", "", PaletteCategory.Action, CodeinIcons.Search, shortcut = "Ctrl+F") { onIntent(WorkspaceIntent.OpenFind) })
             add(PaletteItem("a:search", "Search in project", "", PaletteCategory.Action, CodeinIcons.Regex, shortcut = "Ctrl+Shift+F") { onIntent(WorkspaceIntent.ShowDock(DockTab.Search)) })
             add(PaletteItem("a:ai", "Open Codein AI", "", PaletteCategory.Action, CodeinIcons.Sparkle) { toggleAi() })
-            add(PaletteItem("a:logcat", "Show Logcat", "", PaletteCategory.Action, CodeinIcons.Terminal) { onIntent(WorkspaceIntent.ShowDock(DockTab.Logcat)) })
+            add(PaletteItem("a:logcat", "Show Logcat", "", PaletteCategory.Action, CodeinIcons.ScrollLock) { onIntent(WorkspaceIntent.ShowDock(DockTab.Logcat)) })
+            add(PaletteItem("a:terminal", "Show Terminal", "Android shell in the project folder", PaletteCategory.Action, CodeinIcons.Terminal) { onIntent(WorkspaceIntent.ShowDock(DockTab.Terminal)) })
             add(PaletteItem("a:git", "Source control", "", PaletteCategory.Action, CodeinIcons.GitBranch) { onIntent(WorkspaceIntent.ShowDock(DockTab.Git)) })
             add(PaletteItem("a:deps", "Manage Maven dependencies", "", PaletteCategory.Action, CodeinIcons.Package) { onIntent(WorkspaceIntent.ShowDock(DockTab.Dependencies)) })
             add(PaletteItem("a:collapse", "Collapse all folders", "", PaletteCategory.Action, CodeinIcons.CollapseAll) { onIntent(WorkspaceIntent.CollapseAll) })

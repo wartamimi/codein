@@ -148,11 +148,19 @@ class OnDeviceToolchainTest {
     /** Installs [apk] via the shell user, launches [activity] and fails with the crash log if the process dies. */
     private fun installAndLaunch(apk: File, packageName: String, activity: String) {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val pipes = automation.executeShellCommandRw("pm install -r -t -S ${apk.length()}")
-        val output = pipes[0]
-        val input = pipes[1]
-        ParcelFileDescriptor.AutoCloseOutputStream(input).use { out -> apk.inputStream().use { it.copyTo(out) } }
-        val installLog = ParcelFileDescriptor.AutoCloseInputStream(output).bufferedReader().readText()
+        val installLog = if (android.os.Build.VERSION.SDK_INT >= 31) {
+            val pipes = automation.executeShellCommandRw("pm install -r -t -S ${apk.length()}")
+            val output = pipes[0]
+            val input = pipes[1]
+            ParcelFileDescriptor.AutoCloseOutputStream(input).use { out -> apk.inputStream().use { it.copyTo(out) } }
+            ParcelFileDescriptor.AutoCloseInputStream(output).bufferedReader().readText()
+        } else {
+            // Before API 31 there is no stdin pipe; the shell user can read the app's external files.
+            val staged = File(context.getExternalFilesDir(null), "under-test.apk")
+            apk.copyTo(staged, overwrite = true)
+            shell("cp ${staged.absolutePath} /data/local/tmp/under-test.apk")
+            shell("pm install -r -t /data/local/tmp/under-test.apk")
+        }
         Log.i(TAG, "pm install: $installLog")
         assertTrue("Install failed: $installLog", installLog.contains("Success"))
         shell("logcat -c")
