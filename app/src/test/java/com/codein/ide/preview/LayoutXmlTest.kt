@@ -60,4 +60,12 @@ class LayoutXmlTest {
         assertFalse(isLayoutFile("app/src/main/res/values/strings.xml"))
         assertFalse(isLayoutFile("app/src/main/AndroidManifest.xml"))
     }
+
+    @Test
+    fun recordsStartTagLines() {
+        val xml = "<?xml version=\"1.0\"?>\n<!-- <Fake/> -->\n<LinearLayout\n    android:orientation=\"vertical\">\n\n    <TextView android:text=\"a\"/>\n    <Button\n        android:text=\"b\"/>\n</LinearLayout>\n"
+        val root = LayoutXml.parse(xml).getOrThrow()
+        assertEquals(3, root.line)
+        assertEquals(listOf(6, 7), root.children.map { it.line })
+    }
 }

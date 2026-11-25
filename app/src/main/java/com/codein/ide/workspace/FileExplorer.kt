@@ -1,6 +1,11 @@
 package com.codein.ide.workspace
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +64,8 @@ private sealed interface ExplorerDialog {
     data class NewFile(val parent: String) : ExplorerDialog
     data class NewFolder(val parent: String) : ExplorerDialog
     data class Rename(val row: TreeRow) : ExplorerDialog
+    data class Move(val row: TreeRow) : ExplorerDialog
+    data class FromTemplate(val parent: String, val kind: FileTemplateKind) : ExplorerDialog
     data class Delete(val row: TreeRow) : ExplorerDialog
 }
 
@@ -170,7 +177,15 @@ fun FileExplorer(
                         val parent = if (row.isDirectory) row.relativePath else row.relativePath.substringBeforeLast('/', "")
                         DropdownMenuItem(text = { Text("New file") }, leadingIcon = { Icon(CodeinIcons.FilePlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFile(parent) })
                         DropdownMenuItem(text = { Text("New folder") }, leadingIcon = { Icon(CodeinIcons.FolderPlus, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.NewFolder(parent) })
+                        FileTemplateKind.entries.forEach { kind ->
+                            DropdownMenuItem(
+                                text = { Text("New ${kind.title}") },
+                                leadingIcon = { Icon(CodeinIcons.Code, null, Modifier.size(Sizes.Icon)) },
+                                onClick = { menuFor = null; dialog = ExplorerDialog.FromTemplate(parent, kind) },
+                            )
+                        }
                         DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(CodeinIcons.Type, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Rename(row) })
+                        DropdownMenuItem(text = { Text("Move to…") }, leadingIcon = { Icon(CodeinIcons.Folder, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Move(row) })
                         DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(CodeinIcons.Trash, null, Modifier.size(Sizes.Icon), tint = MaterialTheme.colorScheme.error) }, onClick = { menuFor = null; dialog = ExplorerDialog.Delete(row) })
                     }
                 }
@@ -181,6 +196,12 @@ fun FileExplorer(
     when (val d = dialog) {
         is ExplorerDialog.NewFile -> NameDialog("New file in /${d.parent}", "", "MyClass.kt", { dialog = null }) { onIntent(WorkspaceIntent.NewFile(d.parent, it)); dialog = null }
         is ExplorerDialog.NewFolder -> NameDialog("New folder in /${d.parent}", "", "utils", { dialog = null }) { onIntent(WorkspaceIntent.NewFolder(d.parent, it)); dialog = null }
+        is ExplorerDialog.FromTemplate -> NameDialog("New ${d.kind.title} in /${d.parent}", "", d.kind.hint, { dialog = null }) {
+            onIntent(WorkspaceIntent.NewFromTemplate(d.parent, d.kind, it)); dialog = null
+        }
+        is ExplorerDialog.Move -> MoveDialog(d.row, folders = rows.filter { it.isDirectory }.map { it.relativePath }, onDismiss = { dialog = null }) { target ->
+            onIntent(WorkspaceIntent.Move(d.row.relativePath, target)); dialog = null
+        }
         is ExplorerDialog.Rename -> NameDialog("Rename ${d.row.file.name}", d.row.file.name, "", { dialog = null }) { onIntent(WorkspaceIntent.Rename(d.row.relativePath, it)); dialog = null }
         is ExplorerDialog.Delete -> AlertDialog(
             onDismissRequest = { dialog = null },
@@ -191,6 +212,44 @@ fun FileExplorer(
         )
         null -> Unit
     }
+}
+
+/** Picks the destination folder for "Move to…": type a path or pick a visible folder. */
+@Composable
+private fun MoveDialog(row: TreeRow, folders: List<String>, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var value by rememberSaveable { mutableStateOf(row.relativePath.substringBeforeLast('/', "")) }
+    val invalid = value.contains("..") || value.contains('\\')
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Move ${row.file.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text("Destination folder") },
+                    placeholder = { Text("app/src/main/java/…") },
+                    singleLine = true,
+                    isError = invalid,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
+                    folders.filter { it != row.relativePath && !it.startsWith(row.relativePath + "/") }.forEach { folder ->
+                        Text(
+                            "/$folder",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (folder == value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().clickable { value = folder }.padding(vertical = Spacing.xs),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(value.trim().trim('/')) }, enabled = !invalid) { Text("Move") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

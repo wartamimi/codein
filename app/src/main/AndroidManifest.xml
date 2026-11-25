@@ -44,7 +44,7 @@
         </activity>
 
         <service
-            android:name=".build.BuildKeepAliveService"
+            android:name=".notify.BuildKeepAliveService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 

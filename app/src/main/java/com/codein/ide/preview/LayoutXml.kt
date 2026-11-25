@@ -7,11 +7,15 @@ import java.io.File
 import java.io.StringReader
 import javax.xml.parsers.DocumentBuilderFactory
 
-/** One element of a layout file: its tag and attributes (keys keep their prefix, e.g. `android:text`). */
+/**
+ * One element of a layout file: its tag and attributes (keys keep their prefix, e.g. `android:text`)
+ * and the 1-based [line] its start tag is on, or 0 when unknown.
+ */
 data class LayoutNode(
     val tag: String,
     val attrs: Map<String, String>,
     val children: List<LayoutNode>,
+    val line: Int = 0,
 ) {
     val simpleTag: String get() = tag.substringAfterLast('.')
     operator fun get(name: String): String? = attrs["android:$name"] ?: attrs["app:$name"] ?: attrs[name]
@@ -70,12 +74,34 @@ object LayoutXml {
     /** Parses layout XML into a tree, or returns the parser's message for a malformed file. */
     fun parse(xml: String): Result<LayoutNode> = runCatching {
         val doc = newBuilder().parse(InputSource(StringReader(xml)))
-        toNode(doc.documentElement ?: error("The file has no root element"))
+        val lines = startTagLines(xml)
+        var next = 0
+        toNode(doc.documentElement ?: error("The file has no root element")) { lines.getOrElse(next++) { 0 } }
     }.recoverCatching { e ->
         throw IllegalArgumentException(e.message?.substringAfter("; ")?.trim() ?: "Invalid XML", e)
     }
 
-    private fun toNode(el: Element): LayoutNode {
+    /**
+     * Lines of every element start tag in document order, which is also the DOM's pre-order, so the
+     * n-th element visited gets the n-th line. Comments, CDATA and declarations are skipped.
+     */
+    fun startTagLines(xml: String): List<Int> {
+        val blanked = Regex("""<!--.*?-->|<!\[CDATA\[.*?]]>|<\?.*?\?>|<!DOCTYPE[^>]*>""", RegexOption.DOT_MATCHES_ALL)
+            .replace(xml) { m -> m.value.replace(Regex("[^\n]"), " ") }
+        val out = ArrayList<Int>()
+        var line = 1
+        var i = 0
+        while (i < blanked.length) {
+            val c = blanked[i]
+            if (c == '\n') line++
+            else if (c == '<' && i + 1 < blanked.length && (blanked[i + 1].isLetter() || blanked[i + 1] == '_')) out += line
+            i++
+        }
+        return out
+    }
+
+    private fun toNode(el: Element, nextLine: () -> Int): LayoutNode {
+        val line = nextLine()
         val attrs = LinkedHashMap<String, String>()
         val map = el.attributes
         for (i in 0 until map.length) {
@@ -86,9 +112,9 @@ object LayoutXml {
         val nodes = el.childNodes
         for (i in 0 until nodes.length) {
             val n = nodes.item(i)
-            if (n.nodeType == Node.ELEMENT_NODE) children += toNode(n as Element)
+            if (n.nodeType == Node.ELEMENT_NODE) children += toNode(n as Element, nextLine)
         }
-        return LayoutNode(el.tagName, attrs, children)
+        return LayoutNode(el.tagName, attrs, children, line)
     }
 
     /** Converts `16dp`, `14sp`, `8px` or `@dimen/x` to a number of dp/sp, or null. */

@@ -97,6 +97,9 @@ class TerminalSession(
 
     fun clear() = _lines.update { emptyList() }
 
+    /** Adds a line from Codein itself (not from the shell), such as Tab completion candidates. */
+    fun note(text: String) = append(TerminalLine(text, TerminalLine.Kind.System))
+
     fun stop() {
         process?.destroy()
         readers.forEach { it.cancel() }

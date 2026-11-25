@@ -27,7 +27,7 @@ import com.codein.ide.editor.search.ProjectSearchEngine
 import com.codein.ide.editor.settings.PreferenceChange
 import com.codein.ide.editor.sora.CursorState
 import com.codein.ide.editor.sora.EditorDiagnostic
-import com.codein.ide.build.BuildNotifier
+import com.codein.ide.notify.BuildNotifier
 import com.codein.ide.compiler.ecj.LiveJavaChecker
 import com.codein.ide.project.ProjectRepository
 import com.codein.ide.vcs.git.GitService
@@ -64,6 +64,8 @@ sealed interface WorkspaceIntent {
     data class NewFile(val parentRelative: String, val name: String) : WorkspaceIntent
     data class NewFolder(val parentRelative: String, val name: String) : WorkspaceIntent
     data class Rename(val relativePath: String, val newName: String) : WorkspaceIntent
+    data class Move(val relativePath: String, val targetDirRelative: String) : WorkspaceIntent
+    data class NewFromTemplate(val parentRelative: String, val kind: FileTemplateKind, val name: String) : WorkspaceIntent
     data class Delete(val relativePath: String) : WorkspaceIntent
     data object RefreshTree : WorkspaceIntent
     data object OpenFind : WorkspaceIntent
@@ -180,6 +182,55 @@ class WorkspaceViewModel @Inject constructor(
                 refreshTree()
                 openFile(relative(target))
                 "Created ${intent.name}"
+            }
+            is WorkspaceIntent.NewFromTemplate -> fileOp {
+                val dir = projectDir()
+                val namespace = listOf("app/build.gradle.kts", "app/build.gradle").map { File(dir, it) }.firstOrNull { it.isFile }
+                    ?.readText()?.let { Regex("""namespace\s*=?\s*["']([^"']+)["']""").find(it)?.groupValues?.get(1) }
+                val out = FileTemplates.generate(intent.kind, intent.parentRelative, intent.name, namespace)
+                val targets = out.files.mapKeys { (rel, _) -> File(dir, rel).normalize() }
+                targets.keys.forEach { f ->
+                    if (!f.path.startsWith(dir.normalize().path)) error("Path escapes the project")
+                    if (f.exists()) error("${f.name} already exists")
+                }
+                targets.forEach { (f, text) -> f.parentFile?.mkdirs(); f.writeText(text) }
+                out.activityToRegister?.let { activity ->
+                    val manifest = File(dir, "app/src/main/AndroidManifest.xml")
+                    if (manifest.isFile) manifest.writeText(FileTemplates.registerActivity(manifest.readText(), activity, namespace))
+                }
+                val first = targets.keys.first()
+                expandParents(first)
+                refreshTree()
+                openFile(relative(first))
+                "Created " + targets.keys.joinToString { it.name } + (out.activityToRegister?.let { " and registered it in the manifest" } ?: "")
+            }
+            is WorkspaceIntent.Move -> fileOp {
+                val source = File(projectDir(), intent.relativePath)
+                val targetDir = (if (intent.targetDirRelative.isBlank()) projectDir() else File(projectDir(), intent.targetDirRelative.trim('/'))).normalize()
+                if (!targetDir.path.startsWith(projectDir().normalize().path)) error("Path escapes the project")
+                if (source.isDirectory && targetDir.path.startsWith(source.normalize().path)) error("Cannot move a folder into itself")
+                val target = File(targetDir, source.name)
+                if (target.exists()) error("${source.name} already exists there")
+                targetDir.mkdirs()
+                if (!source.renameTo(target)) error("Move failed")
+                val oldPrefix = intent.relativePath
+                val newRel = relative(target)
+                _state.update { s ->
+                    s.copy(tabs = s.tabs.map { t ->
+                        when {
+                            t.relativePath == oldPrefix -> t.copy(relativePath = newRel, file = target)
+                            t.relativePath.startsWith("$oldPrefix/") -> {
+                                val rel = newRel + t.relativePath.removePrefix(oldPrefix)
+                                t.copy(relativePath = rel, file = File(projectDir(), rel))
+                            }
+                            else -> t
+                        }
+                    })
+                }
+                expandParents(target)
+                refreshTree()
+                persistTabs()
+                "Moved ${source.name} to /${relative(targetDir)}" + if (source.extension in setOf("kt", "java")) ". Update its package line if the folder changed." else ""
             }
             is WorkspaceIntent.NewFolder -> fileOp {
                 val target = resolve(intent.parentRelative, intent.name)

@@ -31,6 +31,7 @@ class TerminalViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private var workingDir: String? = null
+    private var cwd: File? = null
 
     /** Starts the shell in [projectDir], or restarts it there when it ran in another folder. */
     fun open(projectDir: File) {
@@ -43,6 +44,7 @@ class TerminalViewModel @Inject constructor(
         val nativeDir = File(context.applicationInfo.nativeLibraryDir)
         val created = TerminalSession(projectDir, listOf(toolsDir(nativeDir)), viewModelScope)
         workingDir = projectDir.absolutePath
+        cwd = projectDir
         session.value = created
         created.start()
     }
@@ -53,6 +55,19 @@ class TerminalViewModel @Inject constructor(
         history.remove(trimmed)
         history += trimmed
         session.value?.send(trimmed)
+        val home = workingDir?.let(::File) ?: return
+        cwd = TerminalCompletion.afterCommand(trimmed, cwd ?: home, home)
+    }
+
+    /** Completes the last word of [input] against the shell's current folder. */
+    fun complete(input: String): TerminalCompletion.Result {
+        val dir = cwd ?: return TerminalCompletion.Result(input, emptyList())
+        return TerminalCompletion.complete(input, dir)
+    }
+
+    /** Shows the candidates of an ambiguous Tab completion in the output. */
+    fun showCandidates(candidates: List<String>) {
+        session.value?.note(candidates.joinToString("  "))
     }
 
     fun historyAt(offsetFromEnd: Int): String? = history.getOrNull(history.size - offsetFromEnd)

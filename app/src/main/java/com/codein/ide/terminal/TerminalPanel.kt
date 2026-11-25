@@ -1,6 +1,19 @@
 package com.codein.ide.terminal
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,22 +56,76 @@ import com.codein.ide.core.ui.icons.CodeinIcons
 import com.codein.ide.core.ui.theme.CodeinTheme
 import java.io.File
 
+/** One key of the terminal's key bar: a small rounded label, highlighted while [active]. */
+@Composable
+private fun ExtraKey(label: String, description: String, active: Boolean = false, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (active) MaterialTheme.colorScheme.primary else CodeinTheme.colors.tier3)
+            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description }
+            .defaultMinSize(minWidth = 40.dp, minHeight = 36.dp)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 13.sp,
+            color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 /** Dock panel with a line-based Android shell running in the project folder. */
 @Composable
 fun TerminalPanel(viewModel: TerminalViewModel, projectDir: File?, modifier: Modifier = Modifier) {
     val lines by viewModel.lines.collectAsStateWithLifecycle()
     val running by viewModel.running.collectAsStateWithLifecycle()
-    var input by rememberSaveable { mutableStateOf("") }
+    var input by remember { mutableStateOf(TextFieldValue("")) }
+    var ctrl by remember { mutableStateOf(false) }
     var historyOffset by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(projectDir) { projectDir?.let(viewModel::open) }
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) listState.scrollToItem(lines.size - 1) }
 
+    fun setText(text: String) { input = TextFieldValue(text, TextRange(text.length)) }
+
     fun submit() {
-        viewModel.send(input)
-        input = ""
+        viewModel.send(input.text)
+        setText("")
         historyOffset = 0
+    }
+
+    fun historyUp() { viewModel.historyAt(historyOffset + 1)?.let { setText(it); historyOffset++ } }
+    fun historyDown() {
+        if (historyOffset > 1) { historyOffset--; setText(viewModel.historyAt(historyOffset).orEmpty()) } else { historyOffset = 0; setText("") }
+    }
+    fun tab() {
+        val result = viewModel.complete(input.text)
+        setText(result.text)
+        if (result.candidates.isNotEmpty()) viewModel.showCandidates(result.candidates)
+    }
+    fun moveCursor(by: Int) {
+        val at = (input.selection.start + by).coerceIn(0, input.text.length)
+        input = input.copy(selection = TextRange(at))
+    }
+    fun insert(text: String) {
+        val sel = input.selection
+        val next = input.text.replaceRange(sel.min, sel.max, text)
+        input = TextFieldValue(next, TextRange(sel.min + text.length))
+    }
+    /** Ctrl+letter from the key bar or a hardware keyboard. Returns true when it did something. */
+    fun control(letter: Char): Boolean = when (letter.lowercaseChar()) {
+        'c' -> { viewModel.interrupt(); setText(""); true }
+        'l' -> { viewModel.clear(); true }
+        'u' -> { setText(""); true }
+        'a' -> { input = input.copy(selection = TextRange(0)); true }
+        'e' -> { input = input.copy(selection = TextRange(input.text.length)); true }
+        'd' -> { if (input.text.isEmpty()) viewModel.send("exit"); true }
+        else -> false
     }
 
     Column(modifier.background(CodeinTheme.colors.base)) {
@@ -96,7 +162,14 @@ fun TerminalPanel(viewModel: TerminalViewModel, projectDir: File?, modifier: Mod
             Text("$ ", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
             BasicTextField(
                 value = input,
-                onValueChange = { input = it },
+                onValueChange = { next ->
+                    if (ctrl && next.text.length == input.text.length + 1) {
+                        val typed = next.text[next.selection.start - 1]
+                        ctrl = false
+                        if (control(typed)) return@BasicTextField
+                    }
+                    input = next
+                },
                 singleLine = true,
                 textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -106,21 +179,34 @@ fun TerminalPanel(viewModel: TerminalViewModel, projectDir: File?, modifier: Mod
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
                         e.key == Key.Enter -> { submit(); true }
-                        e.key == Key.DirectionUp -> {
-                            viewModel.historyAt(historyOffset + 1)?.let { input = it; historyOffset++ }
-                            true
-                        }
-                        e.key == Key.DirectionDown -> {
-                            if (historyOffset > 1) { historyOffset--; input = viewModel.historyAt(historyOffset).orEmpty() } else { historyOffset = 0; input = "" }
-                            true
-                        }
-                        e.isCtrlPressed && e.key == Key.C -> { viewModel.interrupt(); true }
-                        e.isCtrlPressed && e.key == Key.L -> { viewModel.clear(); true }
+                        e.key == Key.DirectionUp -> { historyUp(); true }
+                        e.key == Key.DirectionDown -> { historyDown(); true }
+                        e.key == Key.Tab -> { tab(); true }
+                        e.isCtrlPressed && e.key == Key.C -> control('c')
+                        e.isCtrlPressed && e.key == Key.L -> control('l')
+                        e.isCtrlPressed && e.key == Key.U -> control('u')
+                        e.isCtrlPressed && e.key == Key.A -> control('a')
+                        e.isCtrlPressed && e.key == Key.E -> control('e')
+                        e.isCtrlPressed && e.key == Key.D -> control('d')
                         else -> false
                     }
                 },
             )
             ToolbarIconButton(CodeinIcons.Send, "Run") { submit() }
+        }
+        // Keys a phone keyboard lacks. Ctrl stays armed until the next letter (Ctrl then C interrupts).
+        Row(
+            Modifier.fillMaxWidth().background(CodeinTheme.colors.tier2).horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            ExtraKey("Tab", "Complete file name") { tab() }
+            ExtraKey("Ctrl", "Control, then a letter: C interrupts, L clears, U erases the line", active = ctrl) { ctrl = !ctrl }
+            ExtraKey("Esc", "Erase the line") { setText(""); ctrl = false }
+            ExtraKey("←", "Cursor left") { moveCursor(-1) }
+            ExtraKey("→", "Cursor right") { moveCursor(1) }
+            ExtraKey("↑", "Previous command") { historyUp() }
+            ExtraKey("↓", "Next command") { historyDown() }
+            listOf("/", "-", "|", "~", ">", "&", "*", ".").forEach { symbol -> ExtraKey(symbol, "Type $symbol") { insert(symbol) } }
         }
     }
 }

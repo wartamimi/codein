@@ -1,5 +1,8 @@
 package com.codein.ide.preview
 
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -61,7 +64,7 @@ fun isLayoutFile(relativePath: String?): Boolean =
  * children are stacked vertically, since their constraints are not solved.
  */
 @Composable
-fun LayoutPreview(xml: String, projectDir: File?, modifier: Modifier = Modifier) {
+fun LayoutPreview(xml: String, projectDir: File?, modifier: Modifier = Modifier, onElementTapped: ((line: Int) -> Unit)? = null) {
     val resources by produceState(ResourceValues(), projectDir) { value = withContext(Dispatchers.IO) { ResourceValues.load(projectDir) } }
     val parsed = remember(xml) { LayoutXml.parse(xml) }
     Column(modifier.background(CodeinTheme.colors.base)) {
@@ -69,7 +72,8 @@ fun LayoutPreview(xml: String, projectDir: File?, modifier: Modifier = Modifier)
             Icon(CodeinIcons.Smartphone, null, Modifier.size(14.dp), tint = CodeinTheme.colors.textMuted)
             Spacer(Modifier.width(6.dp))
             Text(
-                "Wireframe preview · constraints are not solved; build and run for the real look",
+                if (onElementTapped != null) "Wireframe · tap a view to jump to its XML · constraints are not solved"
+                else "Wireframe preview · constraints are not solved; build and run for the real look",
                 style = MaterialTheme.typography.labelSmall,
                 color = CodeinTheme.colors.textMuted,
                 maxLines = 1,
@@ -84,7 +88,9 @@ fun LayoutPreview(xml: String, projectDir: File?, modifier: Modifier = Modifier)
                             .clip(RoundedCornerShape(18.dp)).background(Color(0xFFFDFBFF))
                             .border(BorderStroke(6.dp, Color(0xFF2B2B30)), RoundedCornerShape(18.dp)).padding(6.dp),
                     ) {
-                        Render(root, resources, projectDir, depth = 0, parentIsRow = false)
+                        CompositionLocalProvider(LocalElementTap provides onElementTapped) {
+                            Render(root, resources, projectDir, depth = 0, parentIsRow = false)
+                        }
                     }
                 },
                 onFailure = { e ->
@@ -94,6 +100,9 @@ fun LayoutPreview(xml: String, projectDir: File?, modifier: Modifier = Modifier)
         }
     }
 }
+
+/** Set while the preview sits beside the editor; tapping a view reports its start-tag line. */
+private val LocalElementTap = staticCompositionLocalOf<((Int) -> Unit)?> { null }
 
 private val InkColor = Color(0xFF1B1B1F)
 private val MutedInk = Color(0xFF6B6B74)
@@ -105,7 +114,13 @@ private fun Render(node: LayoutNode, res: ResourceValues, projectDir: File?, dep
     if (depth > 30) return
     if (node["visibility"] == "gone") return
     val hidden = node["visibility"] == "invisible"
+    val tap = LocalElementTap.current
     val base = sizeModifier(node, res, parentIsRow, scope)
+        .then(
+            if (tap != null && node.line > 0) {
+                Modifier.clickable(onClickLabel = "Show ${node.simpleTag} in the XML") { tap(node.line) }
+            } else Modifier,
+        )
         .then(marginModifier(node, res))
         .then(backgroundModifier(node, res))
         .then(paddingModifier(node, res))
@@ -285,7 +300,8 @@ private fun IncludeView(node: LayoutNode, res: ResourceValues, projectDir: File?
     }
     val child = included
     if (child == null) Placeholder(modifier.fillMaxWidth().heightIn(min = 48.dp), "include $name", defaultSize = 0)
-    else Box(modifier) { Render(child, res, projectDir, depth + 1, false, this) }
+    // Lines inside the included file do not belong to the open file, so its views are not tappable.
+    else Box(modifier) { CompositionLocalProvider(LocalElementTap provides null) { Render(child, res, projectDir, depth + 1, false, this) } }
 }
 
 private fun tools(node: LayoutNode, name: String): String? = node.attrs["tools:$name"]

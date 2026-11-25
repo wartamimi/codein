@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -616,7 +617,9 @@ private fun EditorArea(
     modifier: Modifier,
 ) {
     val scheme = CodeinTheme.editorScheme
-    var layoutPreview by rememberSaveable { mutableStateOf(false) }
+    // 0 = code only, 1 = code beside the wireframe, 2 = wireframe only.
+    var layoutMode by rememberSaveable { mutableIntStateOf(0) }
+    val wideEditor = LocalConfiguration.current.screenWidthDp >= 600
     Column(modifier.fillMaxWidth()) {
         EditorTabStrip(state.tabs, state.activeIndex, onIntent)
         val active = state.activeFile
@@ -639,6 +642,7 @@ private fun EditorArea(
                     TextButton(onClick = onOpenPalette) { Text("Quick open") }
                 }
             } else {
+                val split = layoutMode == 1 && isLayoutFile(active.relativePath)
                 SoraCodeEditor(
                     controller = controller,
                     document = EditorDocument(active.relativePath, active.name, active.content, active.version),
@@ -653,7 +657,9 @@ private fun EditorArea(
                     onDiagnosticTapped = { d ->
                         state.build.diagnostics.firstOrNull { it.line == d.line && it.message == d.message }?.let { onIntent(WorkspaceIntent.ShowDock(DockTab.Build)) }
                     },
-                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                    modifier = Modifier
+                        .then(if (!split) Modifier.fillMaxSize() else if (wideEditor) Modifier.fillMaxHeight().fillMaxWidth(0.5f) else Modifier.fillMaxWidth().fillMaxHeight(0.5f))
+                        .graphicsLayer {
                         val p = switch.value
                         alpha = 0.35f + 0.65f * p
                         translationY = (1f - p) * Spacing.sm.toPx()
@@ -661,12 +667,21 @@ private fun EditorArea(
                 )
                 FindReplaceBar(state.find, { onIntent(WorkspaceIntent.Find(it)) }, Modifier.align(Alignment.TopEnd))
                 if (isLayoutFile(active.relativePath)) {
-                    if (layoutPreview) LayoutPreview(active.content, state.projectDir, Modifier.fillMaxSize())
+                    when (layoutMode) {
+                        1 -> LayoutPreview(
+                            active.content,
+                            state.projectDir,
+                            modifier = if (wideEditor) Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.5f)
+                            else Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.5f),
+                            onElementTapped = { line -> onIntent(WorkspaceIntent.GoToLine(line)) },
+                        )
+                        2 -> LayoutPreview(active.content, state.projectDir, Modifier.fillMaxSize())
+                    }
                     PillChip(
-                        if (layoutPreview) "Show code" else "Preview layout",
-                        icon = if (layoutPreview) CodeinIcons.Code else CodeinIcons.Eye,
-                        selected = layoutPreview,
-                        onClick = { layoutPreview = !layoutPreview },
+                        when (layoutMode) { 0 -> "Preview layout"; 1 -> "Preview only"; else -> "Show code" },
+                        icon = if (layoutMode == 2) CodeinIcons.Code else CodeinIcons.Eye,
+                        selected = layoutMode != 0,
+                        onClick = { layoutMode = (layoutMode + 1) % 3 },
                         modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.md),
                     )
                 }
