@@ -1,5 +1,6 @@
 package com.codein.ide.preview
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -92,12 +92,12 @@ fun ColorPickerDialog(literal: ColorLiteral, composeStyle: Boolean, onDismiss: (
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.size(56.dp).background(Color(literal.argb?.toInt() ?: 0), RoundedCornerShape(12.dp)).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)))
+                    Box(Modifier.size(56.dp).background(Color(literal.argb?.toInt() ?: 0), CodeinShape.Surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeinShape.Surface))
                     Text("→", style = MaterialTheme.typography.titleLarge)
-                    Box(Modifier.size(56.dp).background(Color(argb.toInt()), RoundedCornerShape(12.dp)).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)))
+                    Box(Modifier.size(56.dp).background(Color(argb.toInt()), CodeinShape.Surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeinShape.Surface))
                 }
                 LabeledSlider("Hue", hue, 0f..360f) { hue = it }
-                Box(Modifier.fillMaxWidth().height(6.dp).background(androidx.compose.ui.graphics.Brush.horizontalGradient((0..6).map { Color.hsv(it * 60f % 360f, 1f, 1f) }), RoundedCornerShape(3.dp)))
+                Box(Modifier.fillMaxWidth().height(6.dp).background(androidx.compose.ui.graphics.Brush.horizontalGradient((0..6).map { Color.hsv(it * 60f % 360f, 1f, 1f) }), CodeinShape.Surface))
                 LabeledSlider("Saturation", sat, 0f..1f) { sat = it }
                 LabeledSlider("Brightness", value, 0f..1f) { value = it }
                 LabeledSlider("Opacity", alpha, 0f..1f) { alpha = it }

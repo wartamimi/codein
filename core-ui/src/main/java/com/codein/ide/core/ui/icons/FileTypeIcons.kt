@@ -1,12 +1,12 @@
 package com.codein.ide.core.ui.icons
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.codein.ide.core.ui.theme.FileTypeColors
 import com.codein.ide.core.ui.theme.GitStatusColors
-import com.codein.ide.core.ui.theme.PlusJakartaSans
+import com.codein.ide.core.ui.theme.HostGrotesk
 
 /** File categories with their brand color and a short badge label. */
 enum class FileType(val label: String, val color: Color) {
@@ -87,8 +87,8 @@ fun FileTypeBadge(fileName: String, modifier: Modifier = Modifier, size: Dp = 18
     Box(
         modifier = modifier
             .size(size)
-            .background(type.color.copy(alpha = 0.16f), RoundedCornerShape(size * 0.28f))
-            .border(1.dp, type.color.copy(alpha = 0.45f), RoundedCornerShape(size * 0.28f)),
+            .background(type.color.copy(alpha = 0.16f), CodeinShape.Surface)
+            .border(1.dp, type.color.copy(alpha = 0.45f), CodeinShape.Surface),
         contentAlignment = Alignment.Center,
     ) {
         if (iconVector != null) {
@@ -102,7 +102,7 @@ fun FileTypeBadge(fileName: String, modifier: Modifier = Modifier, size: Dp = 18
             Text(
                 text = type.label,
                 color = type.color,
-                fontFamily = PlusJakartaSans,
+                fontFamily = HostGrotesk,
                 fontWeight = FontWeight.Bold,
                 fontSize = fontSize.sp,
                 lineHeight = fontSize.sp,
@@ -140,7 +140,7 @@ fun GitStatusBadge(status: GitFileStatus, modifier: Modifier = Modifier) {
     Text(
         text = status.letter,
         color = status.color,
-        fontFamily = PlusJakartaSans,
+        fontFamily = HostGrotesk,
         fontWeight = FontWeight.Bold,
         fontSize = 11.sp,
         modifier = modifier,

@@ -1,5 +1,6 @@
 package com.codein.ide.editor.search
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -24,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -106,7 +106,7 @@ fun FindReplaceBar(state: FindBarState, onAction: (FindBarAction) -> Unit, modif
     ) {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-        val shape = RoundedCornerShape(12.dp)
+        val shape = CodeinShape.Surface
         val invalid = state.validation as? QueryValidation.Invalid
         val noResults = state.query.isNotEmpty() && invalid == null && state.matches.isEmpty()
         val chevron by animateFloatAsState(if (state.showReplace) 90f else 0f, Motion.spatial(), label = "replace-chevron")
@@ -201,7 +201,7 @@ private fun TogglePill(
     val accent = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     val bg by animateColorAsState(if (active) accent.copy(alpha = 0.18f) else CodeinTheme.colors.tier3, Motion.switch(), label = "toggle-bg")
     val border by animateColorAsState(if (active) accent.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant, Motion.switch(), label = "toggle-border")
-    val shape = RoundedCornerShape(Sizes.KeyPillCorner)
+    val shape = CodeinShape.Control
     Box(
         Modifier
             .widthIn(min = Sizes.KeyPillMinWidth)
@@ -245,7 +245,7 @@ private fun FindField(
         Motion.switch(),
         label = "find-border",
     )
-    val shape = RoundedCornerShape(8.dp)
+    val shape = CodeinShape.Surface
     Row(
         modifier = modifier
             .height(Sizes.Pill)

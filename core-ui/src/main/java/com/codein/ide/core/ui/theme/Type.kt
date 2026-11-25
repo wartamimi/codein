@@ -26,8 +26,11 @@ private fun variableFamily(@FontRes res: Int): FontFamily = FontFamily(
     variableFont(res, FontWeight.Bold),
 )
 
-/** UI typeface: Plus Jakarta Sans (variable weight axis). */
-val PlusJakartaSans: FontFamily = variableFamily(R.font.plus_jakarta_sans)
+/**
+ * UI typeface: Host Grotesk (variable weight axis, 300 to 800). One family carries both display
+ * and reading roles; hierarchy comes from size and a single step from Normal to Medium.
+ */
+val HostGrotesk: FontFamily = variableFamily(R.font.host_grotesk)
 
 /** The four bundled coding fonts. Each maps to a variable TTF inside `res/font/`. */
 enum class CodingFont(val id: String, val displayName: String, @FontRes val fontRes: Int, val supportsLigatures: Boolean) {
@@ -49,18 +52,18 @@ const val TabularNumbers = "tnum"
 private val tight = (-0.01).em
 
 val CodeinTypography = Typography(
-    displaySmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = (-0.02).em),
-    headlineMedium = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = (-0.015).em),
-    headlineSmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = tight),
-    titleLarge = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, lineHeight = 26.sp, letterSpacing = tight),
-    titleMedium = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = tight),
-    titleSmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = tight),
-    bodyLarge = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = tight),
-    bodyMedium = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 19.sp, letterSpacing = tight),
-    bodySmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = tight),
-    labelLarge = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = tight, fontFeatureSettings = TabularNumbers),
-    labelMedium = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.em, fontFeatureSettings = TabularNumbers),
-    labelSmall = TextStyle(fontFamily = PlusJakartaSans, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 0.01.em, fontFeatureSettings = TabularNumbers),
+    displaySmall = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = (-0.02).em),
+    headlineMedium = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = (-0.015).em),
+    headlineSmall = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = tight),
+    titleLarge = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp, letterSpacing = tight),
+    titleMedium = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = tight),
+    titleSmall = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = tight),
+    bodyLarge = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = tight),
+    bodyMedium = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 19.sp, letterSpacing = tight),
+    bodySmall = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = tight),
+    labelLarge = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = tight, fontFeatureSettings = TabularNumbers),
+    labelMedium = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.em, fontFeatureSettings = TabularNumbers),
+    labelSmall = TextStyle(fontFamily = HostGrotesk, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 0.01.em, fontFeatureSettings = TabularNumbers),
 )
 
 /** Monospace text style for code shown outside the editor (diffs, logs, search previews). */

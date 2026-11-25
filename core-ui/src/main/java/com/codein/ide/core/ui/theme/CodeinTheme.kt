@@ -17,10 +17,11 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import com.codein.ide.core.ui.prefs.EditorPreferences
 
 /** Hairlines are the hairline source color at 30% alpha: the only depth cue besides surface tiers. */
@@ -55,12 +56,25 @@ val LocalCodeinColors = staticCompositionLocalOf { extendedColorsFor(EditorColor
 val LocalEditorScheme = staticCompositionLocalOf { EditorColorSchemes.Default }
 val LocalEditorPreferences = staticCompositionLocalOf { EditorPreferences() }
 
+/**
+ * The two shapes of the system: surfaces (cards, panels, sheets, dialogs, fields) are square, and
+ * controls people press (buttons, chips, segmented tabs, key pills) are full pills.
+ */
+object CodeinShape {
+    val Surface: Shape = RectangleShape
+    val Control: Shape = RoundedCornerShape(percent = 50)
+}
+
+/**
+ * Material slots follow the same split. `small` is the chip slot, so chips become pills; buttons
+ * and FABs already default to a full corner in Material 3. Everything else is square.
+ */
 val CodeinShapes = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    extraSmall = CodeinShape.Surface,
+    small = CodeinShape.Control,
+    medium = CodeinShape.Surface,
+    large = CodeinShape.Surface,
+    extraLarge = CodeinShape.Surface,
 )
 
 /** Accessors mirroring [MaterialTheme] for Codein-specific tokens. */
@@ -128,7 +142,8 @@ private fun extendedColorsFor(scheme: EditorColorScheme): CodeinExtendedColors {
 private fun materialColorsFor(scheme: EditorColorScheme): ColorScheme {
     val c = readableChrome(scheme)
     val hairline = c.hairlineSource.copy(alpha = HairlineAlpha)
-    val outline = c.hairlineSource.copy(alpha = 0.55f)
+    // Opaque and lifted to 3:1 against the ground, so field and control borders pass WCAG 1.4.11.
+    val outline = legible(lerp(c.base, c.hairlineSource, 0.55f), c.base, c.textPrimary, 3f)
     val primaryContainer = lerp(c.tier2, c.accent, 0.28f)
     val secondaryContainer = lerp(c.tier2, c.secondary, 0.24f)
     val errorContainer = lerp(c.tier2, c.error, 0.22f)
@@ -211,7 +226,7 @@ private fun materialColorsFor(scheme: EditorColorScheme): ColorScheme {
 
 /**
  * Codein's root theme. The selected [EditorColorScheme] drives both the code editor and the app
- * chrome (surface tiers, accent, hairlines), so switching between Codein Obsidian, Catppuccin
+ * chrome (surface tiers, accent, hairlines), so switching between Codein Black, Catppuccin
  * Mocha, One Dark Pro, Tokyo Night and Clean Daylight recolors the whole IDE at once.
  */
 @Composable

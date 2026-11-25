@@ -1,5 +1,6 @@
 package com.codein.ide.ai.ui
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedContent
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -273,7 +273,7 @@ fun AiProviderSettings(
             onClick = { onSave(draft); apiKey = ""; saved = true },
             enabled = baseUrl.isNotBlank() && (provider != AiProvider.Custom || model.isNotBlank()),
             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.MinTouch),
-            shape = RoundedCornerShape(12.dp),
+            shape = CodeinShape.Surface,
         ) {
             AnimatedContent(saved, transitionSpec = { fadeIn(Motion.switch()) togetherWith fadeOut(Motion.switch()) }, label = "save") { done ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -320,7 +320,7 @@ private fun ProviderGrid(settings: AiSettings, selected: AiProvider, onSelect: (
 
 @Composable
 private fun ProviderCard(provider: AiProvider, info: ProviderSettings?, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = CodeinShape.Surface
     val accent = MaterialTheme.colorScheme.primary
     val ready = info?.isReady == true
     Row(
@@ -334,7 +334,7 @@ private fun ProviderCard(provider: AiProvider, info: ProviderSettings?, selected
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(if (selected) accent.copy(alpha = 0.18f) else CodeinTheme.colors.tier3),
+            Modifier.size(32.dp).clip(CodeinShape.Surface).background(if (selected) accent.copy(alpha = 0.18f) else CodeinTheme.colors.tier3),
             contentAlignment = Alignment.Center,
         ) {
             Icon(provider.icon(), null, tint = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.Icon))
@@ -409,7 +409,7 @@ private fun ModelSection(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(CodeinShape.Surface)
                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f))
                         .padding(Spacing.sm),
                     verticalAlignment = Alignment.Top,
@@ -430,8 +430,8 @@ private fun ModelSection(
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, CodeinTheme.colors.hairline, RoundedCornerShape(8.dp))
+                        .clip(CodeinShape.Surface)
+                        .border(1.dp, CodeinTheme.colors.hairline, CodeinShape.Surface)
                         .heightIn(max = 264.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
@@ -488,7 +488,7 @@ private fun ApiKeyField(value: String, onValueChange: (String) -> Unit, current:
             trailingIcon = {
                 ToolbarIconButton(if (visible) CodeinIcons.EyeOff else CodeinIcons.Eye, if (visible) "Hide key" else "Show key") { visible = !visible }
             },
-            shape = RoundedCornerShape(12.dp),
+            shape = CodeinShape.Surface,
             colors = fieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -538,7 +538,7 @@ private fun Field(
         },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        shape = RoundedCornerShape(12.dp),
+        shape = CodeinShape.Surface,
         colors = fieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )

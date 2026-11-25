@@ -1,5 +1,6 @@
 package com.codein.ide.editor.palette
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -158,7 +158,7 @@ fun CommandPalette(
             Modifier.fillMaxWidth().padding(horizontal = Spacing.lg).padding(top = Spacing.xl + Sizes.TopBar).imePadding(),
             contentAlignment = Alignment.TopCenter,
         ) {
-            val shape = RoundedCornerShape(16.dp)
+            val shape = CodeinShape.Surface
             Column(
                 Modifier
                     .widthIn(max = Sizes.PaletteMaxWidth)
@@ -243,7 +243,7 @@ private fun PaletteRow(item: PaletteItem, positions: List<Int>, selected: Boolea
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.xs)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(CodeinShape.Surface)
             .background(if (selected) CodeinTheme.colors.tier3 else androidx.compose.ui.graphics.Color.Transparent)
             .clickable(onClick = onClick)
             .heightIn(min = Sizes.MinTouch)

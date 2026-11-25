@@ -1,11 +1,11 @@
 package com.codein.ide.signer.ui
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
@@ -165,7 +165,7 @@ private fun FingerprintRow(label: String, value: String, onCopy: () -> Unit) {
         if (copied) { kotlinx.coroutines.delay(1500); copied = false }
     }
     val accent = if (copied) CodeinTheme.colors.success else MaterialTheme.colorScheme.primary
-    val shape = RoundedCornerShape(8.dp)
+    val shape = CodeinShape.Surface
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -273,7 +273,7 @@ private fun Field(label: String, value: String, password: Boolean = false, error
         label = { Text(label) },
         isError = showError,
         supportingText = if (showError) ({ Text(error.orEmpty()) }) else null,
-        shape = RoundedCornerShape(10.dp),
+        shape = CodeinShape.Surface,
         singleLine = true,
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = if (password) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,

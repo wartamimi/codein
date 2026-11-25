@@ -1,5 +1,6 @@
 package com.codein.ide.terminal
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -62,7 +62,7 @@ import java.io.File
 private fun ExtraKey(label: String, description: String, active: Boolean = false, onClick: () -> Unit) {
     Box(
         Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(CodeinShape.Surface)
             .background(if (active) MaterialTheme.colorScheme.primary else CodeinTheme.colors.tier3)
             .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description }

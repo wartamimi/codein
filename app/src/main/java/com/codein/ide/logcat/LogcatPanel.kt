@@ -1,5 +1,6 @@
 package com.codein.ide.logcat
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import com.codein.ide.core.ui.theme.metricsTextStyle
 import com.codein.ide.core.ui.theme.Spacing
@@ -14,7 +15,6 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.material3.TextButton
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -143,7 +143,7 @@ fun LogcatPanel(
                         Text(e.timestamp.substringAfter(' '), style = stamp, color = CodeinTheme.colors.textMuted)
                         Spacer(Modifier.width(Spacing.sm))
                         Box(
-                            Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.18f)),
+                            Modifier.size(16.dp).clip(CodeinShape.Surface).background(color.copy(alpha = 0.18f)),
                             contentAlignment = Alignment.Center,
                         ) { Text(e.priority.letter.toString(), style = stamp, color = color, fontWeight = FontWeight.Bold) }
                         Spacer(Modifier.width(Spacing.sm))
@@ -161,7 +161,7 @@ fun LogcatPanel(
 @Composable
 private fun LevelToggle(priority: LogPriority, selected: Boolean, onClick: () -> Unit) {
     val color = priority.color()
-    val shape = RoundedCornerShape(6.dp)
+    val shape = CodeinShape.Surface
     Box(
         Modifier
             .size(width = 36.dp, height = 28.dp)
@@ -207,7 +207,7 @@ private fun ReadLogsBanner(command: String) {
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
-            .background(CodeinTheme.colors.warning.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+            .background(CodeinTheme.colors.warning.copy(alpha = 0.12f), CodeinShape.Surface)
             .padding(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
