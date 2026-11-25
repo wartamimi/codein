@@ -63,6 +63,8 @@ data class WorkspaceState(
     val branch: String? = null,
     val tabs: List<OpenFile> = emptyList(),
     val activeIndex: Int = -1,
+    /** Bumped when typing-time Java checks produce new problems, so the editor redraws them. */
+    val liveCheckVersion: Int = 0,
     val cursor: CursorState = CursorState(),
     val find: FindBarState = FindBarState(),
     val search: GlobalSearchState = GlobalSearchState(),

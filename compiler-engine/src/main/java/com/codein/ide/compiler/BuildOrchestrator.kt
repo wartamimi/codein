@@ -23,6 +23,7 @@ import com.codein.ide.compiler.model.Severity
 import com.codein.ide.compiler.model.StepStatus
 import com.codein.ide.compiler.cache.CachedArtifact
 import com.codein.ide.compiler.cache.ResolutionCache
+import com.codein.ide.compiler.ecj.LiveJavaChecker
 import com.codein.ide.compiler.kotlin.KotlinToolchainInstaller
 import com.codein.ide.compiler.packaging.ApkPackager
 import com.codein.ide.compiler.packaging.PackagingInputs
@@ -494,6 +495,17 @@ class BuildOrchestrator @Inject constructor(
         }
 
         if (javaFiles.isNotEmpty()) {
+            // Lets the editor check Java files while typing with this build's classpath.
+            runCatching {
+                LiveJavaChecker.writeSetup(
+                    ctx.moduleDir,
+                    LiveJavaChecker.Setup(
+                        ctx.androidJar,
+                        ctx.compileJars + listOfNotNull(kotlinOut.takeIf { kotlinFiles.isNotEmpty() }, toolchain.lambdaStubsJar()),
+                        javaRoots + ctx.generatedSourceDirs,
+                    ),
+                )
+            }
             log(step, "Compiling ${javaFiles.size} Java file(s) with ECJ")
             val result = ecj.compile(
                 JavaCompileRequest(

@@ -28,6 +28,7 @@ import com.codein.ide.editor.settings.PreferenceChange
 import com.codein.ide.editor.sora.CursorState
 import com.codein.ide.editor.sora.EditorDiagnostic
 import com.codein.ide.build.BuildNotifier
+import com.codein.ide.compiler.ecj.LiveJavaChecker
 import com.codein.ide.project.ProjectRepository
 import com.codein.ide.vcs.git.GitService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -99,7 +100,12 @@ class WorkspaceViewModel @Inject constructor(
     private val preferencesRepository: EditorPreferencesRepository,
     private val git: GitService,
     private val buildNotifier: BuildNotifier,
+    private val liveJava: LiveJavaChecker,
 ) : ViewModel() {
+
+    /** Problems from typing-time Java checks, by canonical file path; replaced by a build's own. */
+    private val liveDiagnostics = MutableStateFlow<Map<String, List<CompilerDiagnostic>>>(emptyMap())
+    private var liveJob: Job? = null
 
     private val _state = MutableStateFlow(WorkspaceState())
     val state: StateFlow<WorkspaceState> = _state.asStateFlow()
@@ -392,6 +398,7 @@ class WorkspaceViewModel @Inject constructor(
         if (active.content == text) return
         _state.update { st -> st.copy(tabs = st.tabs.mapIndexed { i, t -> if (i == st.activeIndex) t.copy(content = text) else t }) }
         if (s.find.visible) recomputeMatches()
+        if (active.file.extension == "java") scheduleLiveCheck(active.file, text)
         if (preferences.value.autoSave) {
             autoSaveJob?.cancel()
             autoSaveJob = viewModelScope.launch {
@@ -671,6 +678,8 @@ class WorkspaceViewModel @Inject constructor(
                 )
             }
             val name = _state.value.projectName.ifBlank { dir.name }
+            liveJob?.cancel()
+            liveDiagnostics.value = emptyMap()
             buildNotifier.started(name)
             try {
                 orchestrator.build(BuildRequest(dir, ":app", variant)).collect { event -> onBuildEvent(event) }
@@ -754,9 +763,24 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     /** Diagnostics for the active file, converted to editor squiggles. */
+    private fun scheduleLiveCheck(file: File, text: String) {
+        val dir = _state.value.projectDir ?: return
+        liveJob?.cancel()
+        liveJob = viewModelScope.launch {
+            delay(LIVE_CHECK_DELAY_MS)
+            val moduleDir = File(dir, "app")
+            val found = withContext(Dispatchers.Default) { runCatching { liveJava.check(moduleDir, mapOf(file to text)) }.getOrNull() } ?: return@launch
+            liveDiagnostics.update { current -> current + found.mapKeys { it.key.canonicalPath } }
+            _state.update { it.copy(liveCheckVersion = it.liveCheckVersion + 1) }
+        }
+    }
+
     fun diagnosticsFor(tab: OpenFile?): List<EditorDiagnostic> {
         tab ?: return emptyList()
         val dir = _state.value.projectDir ?: return emptyList()
+        liveDiagnostics.value[tab.file.canonicalPath]?.let { live ->
+            return live.filter { it.line != null }.map { d -> EditorDiagnostic(d.line!!, d.column, d.endColumn, d.message, d.severity == Severity.Error, "Live") }
+        }
         return _state.value.build.diagnostics.mapNotNull { d ->
             val f = d.file?.let { File(it).let { file -> if (file.isAbsolute) file else File(dir, it) } } ?: return@mapNotNull null
             if (f.canonicalPath != tab.file.canonicalPath || d.line == null) return@mapNotNull null
@@ -802,6 +826,7 @@ class WorkspaceViewModel @Inject constructor(
     private companion object {
         const val MAX_OPEN_BYTES = 4L * 1024 * 1024
         const val AUTO_SAVE_DELAY_MS = 1200L
+        const val LIVE_CHECK_DELAY_MS = 900L
         const val SEARCH_DEBOUNCE_MS = 250L
         const val EDITOR_SETTLE_MS = 120L
         const val MAX_LOG_LINES = 4000
