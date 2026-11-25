@@ -330,8 +330,15 @@ class D8Dexer @Inject constructor() {
             chunks.forEachIndexed { index, names ->
                 ensureActive()
                 onProgress(index, chunks.size)
-                val handler = CollectingHandler(diagnostics)
                 val out = File(outputDir, "chunk-$index.zip")
+                // Chunks are written under a temporary name and renamed when complete, so if the
+                // app is killed half-way (low-memory phones) the next attempt resumes from here.
+                if (out.isFile) {
+                    archives += out
+                    return@forEachIndexed
+                }
+                val partial = File(outputDir, "chunk-$index.part.zip").apply { delete() }
+                val handler = CollectingHandler(diagnostics)
                 val ok = runD8(handler) {
                     val builder = D8Command.builder(handler)
                     for (name in names) {
@@ -344,10 +351,11 @@ class D8Dexer @Inject constructor() {
                         .apply { if (androidJar != null) addLibraryFiles(androidJar.toPath()) }
                         .setMinApiLevel(minSdk)
                         .setMode(CompilationMode.RELEASE)
-                        .setOutput(out.toPath(), OutputMode.DexIndexed)
+                        .setOutput(partial.toPath(), OutputMode.DexIndexed)
                         .build()
                 }
                 if (!ok) return@withContext DexResult(false, emptyList(), diagnostics.toList())
+                if (!partial.renameTo(out)) return@withContext DexResult(false, emptyList(), diagnostics + CompilerDiagnostic(DiagnosticSource.D8, Severity.Error, "Could not finish ${out.name}"))
                 archives += out
             }
         } finally {
