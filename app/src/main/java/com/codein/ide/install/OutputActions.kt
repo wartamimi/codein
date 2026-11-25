@@ -36,6 +36,21 @@ object OutputActions {
         }
     }
 
+    /** The package name inside an APK file, or null when it cannot be read. */
+    fun packageOf(context: Context, apk: File): String? =
+        runCatching { context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)?.packageName }.getOrNull()
+
+    /** True when [packageName] was installed or updated at or after [sinceMillis] (with a little clock slack). */
+    fun installedSince(context: Context, packageName: String, sinceMillis: Long): Boolean = runCatching {
+        context.packageManager.getPackageInfo(packageName, 0).lastUpdateTime >= sinceMillis - 2_000
+    }.getOrDefault(false)
+
+    /** Starts the app's launcher activity. */
+    fun launch(context: Context, packageName: String): Boolean {
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: return false
+        return runCatching { context.startActivity(intent) }.isSuccess
+    }
+
     fun share(context: Context, file: File, mimeType: String) {
         val send = Intent(Intent.ACTION_SEND)
             .setType(mimeType)

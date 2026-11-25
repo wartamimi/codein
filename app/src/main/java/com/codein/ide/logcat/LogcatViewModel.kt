@@ -22,6 +22,8 @@ data class LogcatState(
     val filter: String = "",
     val filterError: String? = null,
     val lockedPid: Int? = null,
+    /** Package of an app started from Codein; its process id is locked as soon as it appears. */
+    val followedPackage: String? = null,
     val knownPids: List<Int> = emptyList(),
     val paused: Boolean = false,
     val running: Boolean = false,
@@ -44,6 +46,8 @@ sealed interface LogcatIntent {
     data class Filter(val text: String) : LogcatIntent
     data class LockPid(val pid: Int?) : LogcatIntent
     data object TogglePause : LogcatIntent
+    /** Shows only [packageName]'s logs from its next start ("Run" after install). */
+    data class FollowPackage(val packageName: String) : LogcatIntent
     data object Clear : LogcatIntent
     data class AutoScroll(val enabled: Boolean) : LogcatIntent
 }
@@ -94,7 +98,16 @@ class LogcatViewModel @Inject constructor(
         pending.clear()
         _state.update { s ->
             val merged = (s.entries + batch).takeLast(MAX_ENTRIES)
-            s.copy(entries = merged, knownPids = (s.knownPids + batch.map { it.pid }).distinct().takeLast(32))
+            // ActivityManager logs "Start proc 12345:com.example.app/u0a123 ..." when the followed app starts.
+            val started = s.followedPackage?.let { pkg ->
+                val pattern = Regex("Start proc (\\d+):" + Regex.escape(pkg) + "[/: ]")
+                batch.asReversed().firstNotNullOfOrNull { e -> pattern.find(e.message)?.groupValues?.get(1)?.toIntOrNull() }
+            }
+            s.copy(
+                entries = merged,
+                knownPids = (s.knownPids + batch.map { it.pid }).distinct().takeLast(32),
+                lockedPid = started ?: s.lockedPid,
+            )
         }
     }
 
@@ -109,7 +122,11 @@ class LogcatViewModel @Inject constructor(
                 }
                 _state.update { it.copy(filter = intent.text, filterError = error) }
             }
-            is LogcatIntent.LockPid -> _state.update { it.copy(lockedPid = intent.pid) }
+            is LogcatIntent.LockPid -> _state.update { it.copy(lockedPid = intent.pid, followedPackage = if (intent.pid == null) null else it.followedPackage) }
+            is LogcatIntent.FollowPackage -> {
+                _state.update { it.copy(followedPackage = intent.packageName, lockedPid = null, filter = "", filterError = null) }
+                start()
+            }
             LogcatIntent.TogglePause -> _state.update { it.copy(paused = !it.paused) }
             LogcatIntent.Clear -> {
                 viewModelScope.launch { reader.clear() }

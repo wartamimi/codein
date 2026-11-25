@@ -86,6 +86,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codein.ide.ai.ui.AiAssistantPanel
 import com.codein.ide.editor.sora.CompletionWords
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import com.codein.ide.preview.LayoutPreview
 import com.codein.ide.preview.isLayoutFile
@@ -201,7 +202,23 @@ fun WorkspaceScreen(
     var lastConsoleTab by rememberSaveable { mutableStateOf(DockTab.Build) }
     var consoleOpen by rememberSaveable { mutableStateOf(false) }
 
+    var pendingRun by remember { mutableStateOf<Pair<String, Long>?>(null) }
     LaunchedEffect(controller) { viewModel.commands.collect { command -> controller.execute(command) } }
+    // Run: after the system installer returns, open the freshly installed app and follow its logs.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event != androidx.lifecycle.Lifecycle.Event.ON_RESUME) return@LifecycleEventObserver
+            val (pkg, since) = pendingRun ?: return@LifecycleEventObserver
+            if (OutputActions.installedSince(context, pkg, since)) {
+                pendingRun = null
+                logcatViewModel.onIntent(com.codein.ide.logcat.LogcatIntent.FollowPackage(pkg))
+                if (OutputActions.launch(context, pkg)) viewModel.onIntent(WorkspaceIntent.ShowDock(DockTab.Logcat))
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // Ask once for notification permission (Android 13+) when the first build starts, so the
     // "build finished" notification and the keep-alive progress notification can be shown.
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -225,8 +242,11 @@ fun WorkspaceScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is WorkspaceEffect.Message -> snackbar.showSnackbar(effect.text)
-                is WorkspaceEffect.InstallApk -> if (!OutputActions.install(context, effect.apk)) {
-                    snackbar.showSnackbar("Allow Codein to install apps, then tap Install again")
+                is WorkspaceEffect.InstallApk -> {
+                    pendingRun = OutputActions.packageOf(context, effect.apk)?.let { it to System.currentTimeMillis() }
+                    if (!OutputActions.install(context, effect.apk)) {
+                        snackbar.showSnackbar("Allow Codein to install apps, then tap Install again")
+                    }
                 }
                 is WorkspaceEffect.ShareFile -> OutputActions.share(context, effect.file, effect.mimeType)
                 WorkspaceEffect.OpenAiDock -> aiPaneVisible = true
