@@ -163,7 +163,7 @@ fun NewProjectWizard(
                             }
                             Text(
                                 if (effectiveLanguage == ProjectLanguage.Kotlin) {
-                                    "Kotlin builds need the Kotlin compiler, downloaded once in Settings → Toolchain. The first Kotlin build also prepares the compiler, which takes a few minutes."
+                                    "The first Kotlin build downloads the Kotlin compiler (about 60 MB, once) and prepares it, which takes a few minutes."
                                 } else {
                                     "Java sources compile with the bundled Eclipse compiler (Java 8 language level)."
                                 },

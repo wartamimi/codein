@@ -85,6 +85,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codein.ide.ai.ui.AiAssistantPanel
 import com.codein.ide.editor.sora.CompletionWords
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.codein.ide.preview.LayoutPreview
 import com.codein.ide.preview.isLayoutFile
 import com.codein.ide.terminal.TerminalPanel
@@ -200,6 +202,18 @@ fun WorkspaceScreen(
     var consoleOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(controller) { viewModel.commands.collect { command -> controller.execute(command) } }
+    // Ask once for notification permission (Android 13+) when the first build starts, so the
+    // "build finished" notification and the keep-alive progress notification can be shown.
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    var askedNotifications by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.build.running) {
+        if (state.build.running && !askedNotifications && android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            askedNotifications = true
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     // Project-wide completion words: re-indexed when the project, its file tree or the open file changes.
     LaunchedEffect(controller, state.projectDir, state.tree.size, state.activeFile?.relativePath) {
         val dir = state.projectDir ?: return@LaunchedEffect

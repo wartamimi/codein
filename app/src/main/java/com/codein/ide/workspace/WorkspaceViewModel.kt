@@ -27,6 +27,7 @@ import com.codein.ide.editor.search.ProjectSearchEngine
 import com.codein.ide.editor.settings.PreferenceChange
 import com.codein.ide.editor.sora.CursorState
 import com.codein.ide.editor.sora.EditorDiagnostic
+import com.codein.ide.build.BuildNotifier
 import com.codein.ide.project.ProjectRepository
 import com.codein.ide.vcs.git.GitService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -97,6 +98,7 @@ class WorkspaceViewModel @Inject constructor(
     private val toolchain: BuildToolchain,
     private val preferencesRepository: EditorPreferencesRepository,
     private val git: GitService,
+    private val buildNotifier: BuildNotifier,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WorkspaceState())
@@ -668,9 +670,21 @@ class WorkspaceViewModel @Inject constructor(
                     toolchain = toolchain.status(),
                 )
             }
+            val name = _state.value.projectName.ifBlank { dir.name }
+            buildNotifier.started(name)
             try {
                 orchestrator.build(BuildRequest(dir, ":app", variant)).collect { event -> onBuildEvent(event) }
             } finally {
+                when (val r = _state.value.build.result) {
+                    is BuildResult.Success -> buildNotifier.finished(name, true, "${r.output.name} in ${r.durationMillis / 1000} s", r.output)
+                    is BuildResult.Failure -> buildNotifier.finished(
+                        name,
+                        false,
+                        "Failed at ${r.failedStep.title}: " + (r.diagnostics.firstOrNull { it.severity == Severity.Error }?.message ?: "see the build console"),
+                        null,
+                    )
+                    else -> buildNotifier.finished(name, false, "Build cancelled", null)
+                }
                 _state.update { st ->
                     val steps = st.build.steps.mapValues { (_, ui) -> if (ui.status == StepStatus.Running) ui.copy(status = StepStatus.Cancelled) else ui }
                     st.copy(build = st.build.copy(running = false, steps = steps, result = st.build.result ?: BuildResult.Cancelled(System.currentTimeMillis() - (st.build.startedAt ?: 0L))))
@@ -685,6 +699,7 @@ class WorkspaceViewModel @Inject constructor(
         when (event) {
             is BuildEvent.Started -> appendLog(null, com.codein.ide.compiler.model.LogLevel.Info, "Building ${event.projectName} · ${event.variant.displayName}", event.timestamp)
             is BuildEvent.StepStarted -> _state.update { st ->
+                buildNotifier.progress(st.projectName, event.step.title, st.build.progress.takeIf { it > 0f })
                 st.copy(build = st.build.copy(currentStep = event.step, steps = st.build.steps + (event.step to StepUi(StepStatus.Running, null, event.timestamp))))
             }
             is BuildEvent.StepFinished -> _state.update { st ->

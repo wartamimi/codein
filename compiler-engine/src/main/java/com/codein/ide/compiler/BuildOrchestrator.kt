@@ -23,6 +23,7 @@ import com.codein.ide.compiler.model.Severity
 import com.codein.ide.compiler.model.StepStatus
 import com.codein.ide.compiler.cache.CachedArtifact
 import com.codein.ide.compiler.cache.ResolutionCache
+import com.codein.ide.compiler.kotlin.KotlinToolchainInstaller
 import com.codein.ide.compiler.packaging.ApkPackager
 import com.codein.ide.compiler.packaging.PackagingInputs
 import com.codein.ide.compiler.sdk.BuildToolchain
@@ -114,6 +115,7 @@ class BuildOrchestrator @Inject constructor(
     private val aabBuilder: AabBuilder,
     private val debugKeystore: DebugKeystoreManager,
     private val vault: KeystoreVault,
+    private val kotlinInstaller: KotlinToolchainInstaller,
 ) {
 
     fun build(request: BuildRequest): Flow<BuildEvent> = channelFlow {
@@ -454,6 +456,21 @@ class BuildOrchestrator @Inject constructor(
         val kotlinOut = File(ctx.intermediates, "kotlin-classes").apply { deleteRecursively(); mkdirs() }
 
         if (kotlinFiles.isNotEmpty()) {
+            // First Kotlin build: fetch the compiler (and the Compose plugin when needed) right
+            // here instead of sending the user to Settings.
+            if (!kotlinInstaller.isInstalled(ctx.config.usesCompose)) {
+                log(step, "Downloading the Kotlin compiler" + (if (ctx.config.usesCompose) " and Compose plugin" else "") + " from Maven Central (one time, about 60 MB)")
+                var lastTenth = -1
+                kotlinInstaller.install(ctx.config.usesCompose) { p ->
+                    val tenth = (p.fraction * 10).toInt()
+                    if (tenth != lastTenth) {
+                        lastTenth = tenth
+                        trySend(BuildEvent.Log(step, LogLevel.Info, "Downloading ${p.artifact} (${p.index}/${p.total}) ${(p.fraction * 100).toInt()}%"))
+                    }
+                }.onFailure {
+                    fail(step, DiagnosticSource.Kotlin, "Could not download the Kotlin compiler: ${it.message}. Check the internet connection and build again, or download it in Settings > Toolchain.")
+                }
+            }
             if (!kotlinCompiler.isAvailable()) fail(step, DiagnosticSource.Kotlin, kotlinCompiler.unavailableReason())
             val composePlugin = toolchain.kotlinCompilerDir.listFiles { f -> f.name.startsWith("kotlin-compose-compiler-plugin") && f.extension == "jar" }?.firstOrNull()
             if (ctx.config.usesCompose && composePlugin == null) {
