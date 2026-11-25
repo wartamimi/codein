@@ -1,0 +1,87 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "feat/**" ]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --continue assembleDebug 2>&1 | tee build.log
+      - name: Summarize compiler errors
+        if: failure()
+        run: |
+          echo "==== ERROR SUMMARY ===="
+          grep -E "^e: |^w: .*(deprecated)?|error:|What went wrong|Could not resolve|> Could not find" build.log | grep -v "^w: " | sort -u | head -n 300
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codein-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+  device-test:
+    name: On-device tests (${{ matrix.profile.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          # A roomy current device, and a budget phone: Android 11, 2 GB RAM, 512 MB app heap limit.
+          - { name: "API 34, 4 GB", api: 34, ram: 4096M, heap: 576M, device: pixel_6 }
+          - { name: "API 30, 2 GB budget phone", api: 30, ram: 2048M, heap: 512M, device: pixel_3a }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Build test APKs
+        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Run instrumented tests on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.profile.api }}
+          arch: x86_64
+          target: google_apis
+          profile: ${{ matrix.profile.device }}
+          ram-size: ${{ matrix.profile.ram }}
+          heap-size: ${{ matrix.profile.heap }}
+          disk-size: 6000M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            adb logcat -c
+            adb logcat -s CodeinDeviceTest:V AndroidRuntime:E TestRunner:V > device-log.txt &
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest || (cat device-log.txt; adb logcat -d -b main,system,crash '*:W' | grep -aiE "codein|lowmemory|lmkd|killing|fatal|signal|abort|OutOfMemory|dex2oat" | tail -250; exit 1)
+            cat device-log.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: device-test-report-api${{ matrix.profile.api }}
+          path: |
+            app/build/reports/androidTests/connected/
+            device-log.txt

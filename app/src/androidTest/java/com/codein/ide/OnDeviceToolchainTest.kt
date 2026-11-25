@@ -1,0 +1,234 @@
+package com.codein.ide
+
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
+import android.os.ParcelFileDescriptor
+import androidx.core.content.ContextCompat
+import java.util.concurrent.CountDownLatch
+import android.util.Log
+import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.codein.ide.compiler.BuildRequest
+import com.codein.ide.compiler.model.BuildEvent
+import com.codein.ide.compiler.model.BuildStep
+import com.codein.ide.compiler.model.BuildResult
+import com.codein.ide.di.ToolchainEntryPoint
+import com.codein.ide.project.ProjectLanguage
+import com.codein.ide.project.ProjectSpec
+import com.codein.ide.project.ProjectTemplate
+import com.codein.ide.project.ProjectTemplates
+import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+import java.util.concurrent.TimeUnit
+import java.util.zip.ZipFile
+
+/**
+ * Runs on an emulator in CI. Verifies that the bundled toolchain actually works on Android:
+ * aapt2 executes from nativeLibraryDir, android.jar is available, and a full Java project builds
+ * into a signed APK end to end.
+ */
+@RunWith(AndroidJUnit4::class)
+class OnDeviceToolchainTest {
+
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val entryPoint = EntryPointAccessors.fromApplication(context, ToolchainEntryPoint::class.java)
+
+    @Test
+    fun appLaunchesToHome() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            scenario.onActivity { activity -> assertTrue(!activity.isFinishing) }
+        }
+    }
+
+    @Test
+    fun bundledAapt2Executes() {
+        val aapt2 = entryPoint.buildToolchain().aapt2Binary()
+        assertNotNull("libaapt2.so missing from nativeLibraryDir", aapt2)
+        val process = ProcessBuilder(aapt2!!.absolutePath, "version").redirectErrorStream(true).start()
+        val output = process.inputStream.bufferedReader().readText()
+        assertTrue("aapt2 timed out", process.waitFor(30, TimeUnit.SECONDS))
+        Log.i(TAG, "aapt2 version: $output")
+        assertEquals("aapt2 exit code, output: $output", 0, process.exitValue())
+        assertTrue(output, output.contains("Android Asset Packaging Tool", ignoreCase = true))
+    }
+
+    @Test
+    fun bundledAndroidJarIsAvailable() {
+        val jar = entryPoint.buildToolchain().androidJar()
+        assertNotNull("android.jar not available", jar)
+        ZipFile(jar!!).use { zip -> assertNotNull(zip.getEntry("android/app/Activity.class")) }
+    }
+
+    @Test
+    fun buildsJavaViewsProjectIntoSignedApk(): Unit = runBlocking {
+        buildInstallAndLaunch(
+            ProjectSpec(
+                name = "Smoke",
+                packageName = "com.example.smoke",
+                language = ProjectLanguage.Java,
+                template = ProjectTemplate.EmptyViewsActivity,
+                minSdk = 26,
+                targetSdk = 35,
+            ),
+        )
+    }
+
+    @Test
+    fun buildsKotlinComposeProjectIntoSignedApk(): Unit = runBlocking {
+        val installer = entryPoint.kotlinToolchainInstaller()
+        val started = System.currentTimeMillis()
+        installer.install(includeCompose = true) { }.getOrElse { fail("Kotlin toolchain download failed: $it") }
+        Log.i(TAG, "Kotlin toolchain installed in ${System.currentTimeMillis() - started} ms")
+        buildInstallAndLaunch(
+            ProjectSpec(
+                name = "Compose Smoke",
+                packageName = "com.example.composesmoke",
+                language = ProjectLanguage.Kotlin,
+                template = ProjectTemplate.ComposeMaterial3,
+                minSdk = 26,
+                targetSdk = 35,
+            ),
+        )
+    }
+
+    /** Generates [spec], builds it twice (cold, then warm), then installs and launches the APK. */
+    private suspend fun buildInstallAndLaunch(spec: ProjectSpec) {
+        val dir = File(context.cacheDir, "smoke-" + spec.packageName.substringAfterLast('.')).apply { deleteRecursively(); mkdirs() }
+        ProjectTemplates.generate(spec).forEach { (path, content) ->
+            File(dir, path).apply { parentFile?.mkdirs(); writeText(content) }
+        }
+        val label = spec.packageName.substringAfterLast('.')
+        // Log while the build runs, so a crash mid-build still shows how far it got.
+        val events = entryPoint.buildOrchestrator().build(BuildRequest(dir)).onEach { e ->
+            when (e) {
+                is BuildEvent.Log -> Log.i(TAG, "[$label/${e.step?.name}] ${e.message}")
+                is BuildEvent.Diagnostic -> Log.w(TAG, "[$label/${e.step.name}] ${e.diagnostic}")
+                is BuildEvent.StepFinished -> Log.i(TAG, "$label step ${e.step.name}: ${e.status} in ${e.durationMillis} ms")
+                else -> Unit
+            }
+        }.toList()
+        val result = events.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result
+        when (result) {
+            is BuildResult.Success -> Unit
+            is BuildResult.Failure -> fail("Build failed at ${result.failedStep}: " + result.diagnostics.joinToString("\n"))
+            is BuildResult.Cancelled -> fail("Build was cancelled")
+            null -> fail("Build produced no result")
+        }
+        result as BuildResult.Success
+        assertTrue(result.output.isFile)
+        ZipFile(result.output).use { zip ->
+            assertNotNull(zip.getEntry("classes.dex"))
+            assertNotNull(zip.getEntry("AndroidManifest.xml"))
+            assertNotNull(zip.getEntry("resources.arsc"))
+        }
+        Log.i(TAG, "$label built ${result.output} (${result.output.length() / 1024} KB) in ${result.durationMillis} ms")
+
+        // Second build with warm caches, after touching a source file, to measure an edit-and-run cycle.
+        dir.walkTopDown().firstOrNull { it.name.startsWith("MainActivity.") }?.let { it.appendText("\n") }
+        val warm = entryPoint.buildOrchestrator().build(BuildRequest(dir)).toList()
+        warm.filterIsInstance<BuildEvent.Log>().filter { it.step == BuildStep.Dexing }.forEach { Log.i(TAG, "$label warm [Dexing] ${it.message}") }
+        warm.filterIsInstance<BuildEvent.StepFinished>().forEach { Log.i(TAG, "$label warm step ${it.step.name}: ${it.status} in ${it.durationMillis} ms") }
+        when (val warmResult = warm.filterIsInstance<BuildEvent.Finished>().lastOrNull()?.result) {
+            is BuildResult.Success -> {
+                Log.i(TAG, "$label warm build took ${warmResult.durationMillis} ms")
+                installAndLaunch(warmResult.output, spec.packageName, "${spec.packageName}.MainActivity")
+            }
+            else -> fail("Warm build did not succeed: $warmResult")
+        }
+    }
+
+    /** Installs [apk] via the shell user, launches [activity] and fails with the crash log if the process dies. */
+    private fun installAndLaunch(apk: File, packageName: String, activity: String) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val installLog = if (android.os.Build.VERSION.SDK_INT >= 31) {
+            val pipes = automation.executeShellCommandRw("pm install -r -t -S ${apk.length()}")
+            val output = pipes[0]
+            val input = pipes[1]
+            ParcelFileDescriptor.AutoCloseOutputStream(input).use { out -> apk.inputStream().use { it.copyTo(out) } }
+            ParcelFileDescriptor.AutoCloseInputStream(output).bufferedReader().readText()
+        } else {
+            // Before API 31 the shell has no stdin pipe, so install through PackageInstaller with
+            // the shell's INSTALL_PACKAGES permission adopted (no confirmation dialog).
+            installWithSession(apk)
+        }
+        Log.i(TAG, "pm install: $installLog")
+        assertTrue("Install failed: $installLog", installLog.contains("Success"))
+        shell("logcat -c")
+        Log.i(TAG, "am start: " + shell("am start -W -n $packageName/$activity"))
+        Thread.sleep(6000)
+        val pid = shell("pidof $packageName").trim()
+        val crash = shell("logcat -d -b crash")
+        val appLog = shell("logcat -d -v brief AndroidRuntime:E ActivityManager:W ActivityTaskManager:W *:S")
+        crash.lines().forEach { Log.i(TAG, "crash| $it") }
+        appLog.lines().takeLast(80).forEach { Log.i(TAG, "log| $it") }
+        shell("am force-stop $packageName")
+        assertTrue("Built app crashed:\n$crash\n$appLog", pid.isNotEmpty() && !crash.contains(packageName))
+    }
+
+    private fun installWithSession(apk: File): String {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.adoptShellPermissionIdentity(android.Manifest.permission.INSTALL_PACKAGES)
+        try {
+            val installer = context.packageManager.packageInstaller
+            val sessionId = installer.createSession(PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL))
+            val action = "${context.packageName}.TEST_INSTALL_$sessionId"
+            val done = CountDownLatch(1)
+            var result = "no result"
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(c: Context, intent: Intent) {
+                    val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+                    if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) return
+                    result = if (status == PackageInstaller.STATUS_SUCCESS) "Success" else "Failure $status: " + intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                    done.countDown()
+                }
+            }
+            ContextCompat.registerReceiver(context, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
+            try {
+                installer.openSession(sessionId).use { session ->
+                    session.openWrite("base.apk", 0, apk.length()).use { out ->
+                        apk.inputStream().use { it.copyTo(out) }
+                        session.fsync(out)
+                    }
+                    val callback = PendingIntent.getBroadcast(
+                        context,
+                        sessionId,
+                        Intent(action).setPackage(context.packageName),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+                    )
+                    session.commit(callback.intentSender)
+                }
+                if (!done.await(180, TimeUnit.SECONDS)) result = "Timed out waiting for PackageInstaller"
+            } finally {
+                context.unregisterReceiver(receiver)
+            }
+            return result
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
+    }
+
+    private fun shell(command: String): String {
+        val fd = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+        return ParcelFileDescriptor.AutoCloseInputStream(fd).bufferedReader().readText()
+    }
+
+    private companion object {
+        const val TAG = "CodeinDeviceTest"
+    }
+}
