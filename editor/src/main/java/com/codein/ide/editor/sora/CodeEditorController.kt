@@ -237,6 +237,56 @@ class CodeEditorController {
         content.replace(s.line, s.column, e.line, e.column, replacement)
     }
 
+    /** Duplicates the selected lines (or the cursor's line) below themselves. */
+    fun duplicateLines() {
+        val view = editor ?: return
+        val content = view.text
+        val first = view.cursor.leftLine
+        val last = view.cursor.rightLine
+        val start = content.getCharIndex(first, 0)
+        val end = content.getCharIndex(last, content.getColumnCount(last))
+        val block = content.subSequence(start, end).toString()
+        content.insert(last, content.getColumnCount(last), "\n" + block)
+    }
+
+    /** Deletes the selected lines (or the cursor's line), including the line break. */
+    fun deleteLines() {
+        val view = editor ?: return
+        val content = view.text
+        val first = view.cursor.leftLine
+        val last = view.cursor.rightLine
+        if (last < content.lineCount - 1) content.delete(first, 0, last + 1, 0)
+        else if (first > 0) content.delete(first - 1, content.getColumnCount(first - 1), last, content.getColumnCount(last))
+        else content.delete(0, 0, last, content.getColumnCount(last))
+    }
+
+    /** Moves the selected lines (or the cursor's line) one line up or down. */
+    fun moveLines(up: Boolean) {
+        val view = editor ?: return
+        val content = view.text
+        val first = view.cursor.leftLine
+        val last = view.cursor.rightLine
+        if (up && first == 0 || !up && last >= content.lineCount - 1) return
+        val lines = (first..last).map { content.getLineString(it) }
+        if (up) {
+            val above = content.getLineString(first - 1)
+            content.replace(first - 1, 0, last, content.getColumnCount(last), (lines + above).joinToString("\n"))
+            view.setSelectionRegion(first - 1, 0, last - 1, content.getColumnCount(last - 1))
+        } else {
+            val below = content.getLineString(last + 1)
+            content.replace(first, 0, last + 1, content.getColumnCount(last + 1), (listOf(below) + lines).joinToString("\n"))
+            view.setSelectionRegion(first + 1, 0, last + 1, content.getColumnCount(last + 1))
+        }
+    }
+
+    /** Selected text, or an empty string when nothing is selected. */
+    fun selectedText(): String {
+        val view = editor ?: return ""
+        val cursor = view.cursor
+        if (!cursor.isSelected) return ""
+        return view.text.subSequence(cursor.left, cursor.right).toString()
+    }
+
     /** Replaces the full document as a single undoable edit (used by Replace All / Apply Diff). */
     fun replaceAll(newText: String) {
         val view = editor ?: return

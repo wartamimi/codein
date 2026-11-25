@@ -186,6 +186,9 @@ fun FileExplorer(
                         }
                         DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(CodeinIcons.Type, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Rename(row) })
                         DropdownMenuItem(text = { Text("Move to…") }, leadingIcon = { Icon(CodeinIcons.Folder, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; dialog = ExplorerDialog.Move(row) })
+                        if (!row.isDirectory) {
+                            DropdownMenuItem(text = { Text("Local history") }, leadingIcon = { Icon(CodeinIcons.History, null, Modifier.size(Sizes.Icon)) }, onClick = { menuFor = null; onIntent(WorkspaceIntent.ShowHistory(row.relativePath)) })
+                        }
                         DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(CodeinIcons.Trash, null, Modifier.size(Sizes.Icon), tint = MaterialTheme.colorScheme.error) }, onClick = { menuFor = null; dialog = ExplorerDialog.Delete(row) })
                     }
                 }

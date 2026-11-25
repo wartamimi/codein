@@ -317,6 +317,7 @@ class GitService @Inject constructor(@ApplicationContext context: Context) {
             build/
             .idea/
             .kotlin/
+            .codein/
             local.properties
             *.keystore
             *.jks

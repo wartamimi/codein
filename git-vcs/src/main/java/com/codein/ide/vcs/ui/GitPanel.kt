@@ -1,5 +1,9 @@
 package com.codein.ide.vcs.ui
 
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material3.Surface
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -132,6 +136,7 @@ fun GitPanel(state: GitPanelState, onIntent: (GitIntent) -> Unit, onOpenFile: (S
             }
         }
     }
+    state.review?.let { review -> CommitReviewDialog(review, state.commitMessage, onIntent) }
     if (showRemote) {
         SingleFieldDialog("Remote origin URL", state.status.remoteUrl.orEmpty(), "https://github.com/user/repo.git", KeyboardType.Uri, onDismiss = { showRemote = false }) {
             onIntent(GitIntent.SetRemote(it)); showRemote = false
@@ -192,8 +197,8 @@ private fun CommitBox(state: GitPanelState, onIntent: (GitIntent) -> Unit) {
         )
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val canCommit = state.commitMessage.isNotBlank() && state.busy == null
-            Button(onClick = { onIntent(GitIntent.Commit(stageAll = false)) }, enabled = canCommit && state.status.staged.isNotEmpty()) { Text("Commit staged") }
-            TextButton(onClick = { onIntent(GitIntent.Commit(stageAll = true)) }, enabled = canCommit && state.status.files.isNotEmpty()) { Text("Commit all") }
+            Button(onClick = { onIntent(GitIntent.ReviewCommit(stageAll = false)) }, enabled = canCommit && state.status.staged.isNotEmpty()) { Text("Review & commit staged") }
+            TextButton(onClick = { onIntent(GitIntent.ReviewCommit(stageAll = true)) }, enabled = canCommit && state.status.files.isNotEmpty()) { Text("Commit all…") }
         }
     }
 }
@@ -242,8 +247,61 @@ private fun ChangeRow(
     }
 }
 
+/** Full-screen check of every change a commit would include, with the commit button at the bottom. */
 @Composable
-private fun DiffView(diff: String) {
+private fun CommitReviewDialog(review: CommitReview, message: String, onIntent: (GitIntent) -> Unit) {
+    var expanded by remember(review) { mutableStateOf(if (review.files.size <= 3) review.files.map { it.path }.toSet() else emptySet()) }
+    Dialog(onDismissRequest = { onIntent(GitIntent.CancelReview) }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxSize().systemBarsPadding()) {
+                PanelHeader("Review commit", icon = CodeinIcons.GitCommit) {
+                    ToolbarIconButton(CodeinIcons.Close, "Cancel", size = 32.dp) { onIntent(GitIntent.CancelReview) }
+                }
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(message.trim(), style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "${review.files.size} file(s) · +${review.added} −${review.removed}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CodeinTheme.colors.textMuted,
+                    )
+                }
+                Hairline()
+                LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                    items(review.files, key = { it.path }) { file ->
+                        val open = file.path in expanded
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable(onClickLabel = if (open) "Hide diff" else "Show diff") { expanded = if (open) expanded - file.path else expanded + file.path }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(if (open) CodeinIcons.ChevronDown else CodeinIcons.ChevronRight, null, Modifier.size(16.dp), tint = CodeinTheme.colors.textMuted)
+                            Spacer(Modifier.width(6.dp))
+                            FileTypeBadge(file.path.substringAfterLast('/'))
+                            Spacer(Modifier.width(8.dp))
+                            Text(file.path, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text("+${file.added}", style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.success)
+                            Spacer(Modifier.width(6.dp))
+                            Text("−${file.removed}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        if (open) DiffView(file.diff)
+                    }
+                }
+                Hairline()
+                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    TextButton(onClick = { onIntent(GitIntent.CancelReview) }) { Text("Back") }
+                    Button(onClick = { onIntent(GitIntent.Commit(review.stageAll)) }, enabled = review.files.isNotEmpty()) {
+                        Text("Commit ${review.files.size} file(s)")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Colored unified diff (+ green, − red, @@ muted), scrollable sideways; shared with local history. */
+@Composable
+fun DiffView(diff: String) {
     val prefs = CodeinTheme.editorPreferences
     val style = codeTextStyle(prefs.codingFont, 11.5f, false)
     val add = CodeinTheme.colors.success

@@ -1,5 +1,10 @@
 package com.codein.ide.editor.search
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,6 +56,28 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** Applies a project-wide replace to file texts; pure so it can be tested without the UI. */
+object ProjectReplace {
+    /** Returns the new text of each changed file and the total number of replacements. */
+    fun plan(
+        files: List<FileHits>,
+        excluded: Set<String>,
+        query: String,
+        replacement: String,
+        options: FindOptions,
+        currentText: (FileHits) -> String?,
+    ): Pair<Map<FileHits, String>, Int> {
+        val out = LinkedHashMap<FileHits, String>()
+        var total = 0
+        files.filter { it.relativePath !in excluded }.forEach { f ->
+            val text = currentText(f) ?: return@forEach
+            val (next, count) = FindReplaceEngine.replaceAll(text, query, replacement, options)
+            if (count > 0 && next != text) { out[f] = next; total += count }
+        }
+        return out to total
+    }
+}
+
 data class LineHit(val line: Int, val column: Int, val preview: String, val highlightStart: Int, val highlightEnd: Int, val offset: Int, val length: Int)
 
 data class FileHits(val file: File, val relativePath: String, val hits: List<LineHit>)
@@ -60,7 +87,7 @@ data class ProjectSearchResult(val files: List<FileHits>, val totalHits: Int, va
 /** Cross-file regex search across a project directory with glob include filters. */
 object ProjectSearchEngine {
 
-    private val skipDirs = setOf("build", ".gradle", ".git", ".idea", ".kotlin", "node_modules", ".cxx")
+    private val skipDirs = setOf("build", ".gradle", ".git", ".idea", ".kotlin", "node_modules", ".cxx", ".codein")
     private const val MAX_FILE_BYTES = 2L * 1024 * 1024
 
     /** Converts a comma-separated glob list (`*.kt, *.xml, *.gradle*`) into matchers. */
@@ -136,11 +163,23 @@ object ProjectSearchEngine {
 
 data class GlobalSearchState(
     val query: String = "",
+    val replacement: String = "",
+    val replaceOpen: Boolean = false,
+    /** Relative paths left out of "Replace all". */
+    val excluded: Set<String> = emptySet(),
     val includeGlobs: String = "*.kt, *.java, *.xml, *.gradle*",
     val options: FindOptions = FindOptions(),
     val searching: Boolean = false,
     val result: ProjectSearchResult? = null,
 )
+
+/** Actions of the project search panel's replace row. */
+interface ProjectReplaceActions {
+    fun onReplacementChange(text: String)
+    fun onToggleReplace()
+    fun onToggleExcluded(relativePath: String)
+    fun onReplaceAll()
+}
 
 /** Global project search panel with collapsible per-file result cards. */
 @Composable
@@ -151,10 +190,13 @@ fun GlobalSearchPanel(
     onOptionsChange: (FindOptions) -> Unit,
     onOpenHit: (File, LineHit) -> Unit,
     modifier: Modifier = Modifier,
+    replace: ProjectReplaceActions? = null,
 ) {
     val validation = FindReplaceEngine.validate(state.query, state.options)
+    var confirmReplace by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
         PanelHeader("Search in project", icon = CodeinIcons.Search) {
+            if (replace != null) ToolbarIconButton(CodeinIcons.Replace, "Replace in files", active = state.replaceOpen, size = 30.dp) { replace.onToggleReplace() }
             ToolbarIconButton(CodeinIcons.CaseSensitive, "Match case", active = state.options.matchCase, size = 30.dp) { onOptionsChange(state.options.copy(matchCase = !state.options.matchCase)) }
             ToolbarIconButton(CodeinIcons.WholeWord, "Whole word", active = state.options.wholeWord, size = 30.dp) { onOptionsChange(state.options.copy(wholeWord = !state.options.wholeWord)) }
             ToolbarIconButton(CodeinIcons.Regex, "Regex", active = state.options.regex, size = 30.dp) { onOptionsChange(state.options.copy(regex = !state.options.regex)) }
@@ -171,6 +213,23 @@ fun GlobalSearchPanel(
         )
         if (invalid != null) {
             Text(invalid.message, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs))
+        }
+        if (replace != null && state.replaceOpen) {
+            Spacer(Modifier.height(Spacing.sm))
+            Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+                CompactTextField(
+                    value = state.replacement,
+                    onValueChange = replace::onReplacementChange,
+                    placeholder = if (state.options.regex) "Replace with, \$1 for groups" else "Replace with",
+                    leadingIcon = CodeinIcons.Replace,
+                    textStyle = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 13f, false),
+                    modifier = Modifier.weight(1f),
+                )
+                val replaceable = state.result?.let { r -> r.files.filter { it.relativePath !in state.excluded } }.orEmpty()
+                TextButton(onClick = { confirmReplace = true }, enabled = replaceable.isNotEmpty() && invalid == null && !state.searching) {
+                    Text("Replace all")
+                }
+            }
         }
         Spacer(Modifier.height(Spacing.sm))
         CompactTextField(
@@ -193,14 +252,35 @@ fun GlobalSearchPanel(
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
             items(state.result?.files.orEmpty(), key = { it.file.absolutePath }) { fileHits ->
-                FileHitsCard(fileHits, onOpenHit)
+                FileHitsCard(
+                    fileHits,
+                    onOpenHit,
+                    included = if (replace != null && state.replaceOpen) fileHits.relativePath !in state.excluded else null,
+                    onToggleIncluded = { replace?.onToggleExcluded(fileHits.relativePath) },
+                )
             }
         }
+    }
+    if (confirmReplace && replace != null) {
+        val files = state.result?.files.orEmpty().filter { it.relativePath !in state.excluded }
+        val count = files.sumOf { it.hits.size }
+        AlertDialog(
+            onDismissRequest = { confirmReplace = false },
+            title = { Text("Replace in ${files.size} file(s)?") },
+            text = {
+                Text(
+                    "$count match(es) of \"${state.query}\" become \"${state.replacement}\". Files are saved right away; " +
+                        "each file's previous version is kept in its local history.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { confirmReplace = false; replace.onReplaceAll() }) { Text("Replace") } },
+            dismissButton = { TextButton(onClick = { confirmReplace = false }) { Text("Cancel") } },
+        )
     }
 }
 
 @Composable
-private fun FileHitsCard(fileHits: FileHits, onOpenHit: (File, LineHit) -> Unit) {
+private fun FileHitsCard(fileHits: FileHits, onOpenHit: (File, LineHit) -> Unit, included: Boolean? = null, onToggleIncluded: () -> Unit = {}) {
     var expanded by remember { mutableStateOf(true) }
     Column(
         Modifier
@@ -224,6 +304,13 @@ private fun FileHitsCard(fileHits: FileHits, onOpenHit: (File, LineHit) -> Unit)
                 Text(fileHits.relativePath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             CountBadge(fileHits.hits.size.toString(), MaterialTheme.colorScheme.primary)
+            if (included != null) {
+                Checkbox(
+                    checked = included,
+                    onCheckedChange = { onToggleIncluded() },
+                    modifier = Modifier.semantics { contentDescription = if (included) "Included in replace" else "Left out of replace" },
+                )
+            }
         }
         AnimatedVisibility(expanded) {
             Column(Modifier.padding(bottom = 4.dp)) {

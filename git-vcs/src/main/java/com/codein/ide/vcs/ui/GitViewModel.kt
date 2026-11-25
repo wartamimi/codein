@@ -34,13 +34,29 @@ data class GitPanelState(
     val credentials: GitCredentials = GitCredentials("", "", "", ""),
     /** OpenSSH public key of Codein's SSH identity, or null when none was generated. */
     val sshPublicKey: String? = null,
+    /** Changes about to be committed, shown for review before the commit is made. */
+    val review: CommitReview? = null,
 )
+
+/** The files a commit would include, each with its diff, so they can be checked before committing. */
+data class CommitReview(val stageAll: Boolean, val files: List<ReviewFile>) {
+    val added: Int get() = files.sumOf { it.added }
+    val removed: Int get() = files.sumOf { it.removed }
+}
+
+data class ReviewFile(val path: String, val diff: String) {
+    val added: Int = diff.lineSequence().count { it.startsWith("+") && !it.startsWith("+++") }
+    val removed: Int = diff.lineSequence().count { it.startsWith("-") && !it.startsWith("---") }
+}
 
 sealed interface GitIntent {
     data object Refresh : GitIntent
     data object Init : GitIntent
     data class CommitMessage(val text: String) : GitIntent
     data class Commit(val stageAll: Boolean) : GitIntent
+    /** Loads the diffs of what [Commit] would include and shows them for review first. */
+    data class ReviewCommit(val stageAll: Boolean) : GitIntent
+    data object CancelReview : GitIntent
     data class ToggleStage(val path: String) : GitIntent
     data object StageAll : GitIntent
     data class ShowDiff(val path: String?) : GitIntent
@@ -88,8 +104,17 @@ class GitViewModel @Inject constructor(
             GitIntent.Refresh -> refresh()
             GitIntent.Init -> run("Initializing") { git.init(dir); "Initialized Git repository" }
             is GitIntent.CommitMessage -> _state.update { it.copy(commitMessage = intent.text) }
+            is GitIntent.ReviewCommit -> viewModelScope.launch {
+                val status = _state.value.status
+                val paths = if (intent.stageAll) status.files.keys.toList() else status.files.keys.filter { it in status.staged }
+                _state.update { it.copy(busy = "Collecting changes") }
+                val files = paths.map { path -> ReviewFile(path, runCatching { git.diff(dir, path) }.getOrElse { it.message.orEmpty() }) }
+                _state.update { it.copy(busy = null, review = CommitReview(intent.stageAll, files)) }
+            }
+            GitIntent.CancelReview -> _state.update { it.copy(review = null) }
             is GitIntent.Commit -> run("Committing") {
                 val creds = credentialsRepository.current()
+                _state.update { it.copy(review = null) }
                 val info = git.commit(dir, _state.value.commitMessage, creds.ident(), intent.stageAll)
                 _state.update { it.copy(commitMessage = "") }
                 "Committed ${info.shortId}: ${info.message}"

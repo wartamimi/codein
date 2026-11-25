@@ -13,6 +13,14 @@ import com.codein.ide.editor.search.GlobalSearchState
 import com.codein.ide.editor.sora.CursorState
 import java.io.File
 
+/** Versions of [relativePath] kept by [LocalHistory] and the diff of the [selected] one against the current text. */
+data class FileHistoryUi(
+    val relativePath: String,
+    val versions: List<LocalHistory.Version>,
+    val selected: LocalHistory.Version? = null,
+    val diff: String = "",
+)
+
 /** One visible row of the flattened file explorer tree. */
 data class TreeRow(
     val file: File,
@@ -68,6 +76,8 @@ data class WorkspaceState(
     val cursor: CursorState = CursorState(),
     val find: FindBarState = FindBarState(),
     val search: GlobalSearchState = GlobalSearchState(),
+    /** Local history dialog of one file, or null when closed. */
+    val history: FileHistoryUi? = null,
     val build: BuildUiState = BuildUiState(),
     val dockTab: DockTab = DockTab.Build,
     val dockVisible: Boolean = false,
@@ -91,6 +101,8 @@ sealed interface EditorCommand {
     data object Undo : EditorCommand
     data object Redo : EditorCommand
     data object ToggleComment : EditorCommand
+    /** Replaces the whole document in one undoable step (Format document). */
+    data class ReplaceAllText(val text: String) : EditorCommand
 }
 
 /** One-shot UI effects. */
@@ -103,7 +115,7 @@ sealed interface WorkspaceEffect {
 
 /** Builds the flattened, sorted file tree for the expanded directories. */
 object FileTreeBuilder {
-    private val hidden = setOf(".git", ".gradle", ".idea", "build", ".kotlin", ".cxx")
+    private val hidden = setOf(".git", ".gradle", ".idea", "build", ".kotlin", ".cxx", ".codein")
 
     fun build(root: File, expanded: Set<String>): List<TreeRow> {
         val rows = ArrayList<TreeRow>()

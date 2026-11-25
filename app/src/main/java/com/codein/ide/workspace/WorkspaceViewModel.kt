@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codein.ide.ai.context.AiContextSnapshot
 import com.codein.ide.ai.diff.FilePatch
+import com.codein.ide.ai.diff.LineDiff
 import com.codein.ide.ai.diff.PatchResult
 import com.codein.ide.ai.diff.UnifiedDiff
 import com.codein.ide.compiler.BuildOrchestrator
@@ -24,6 +25,8 @@ import com.codein.ide.editor.search.FindBarAction
 import com.codein.ide.editor.search.FindReplaceEngine
 import com.codein.ide.editor.search.LineHit
 import com.codein.ide.editor.search.ProjectSearchEngine
+import com.codein.ide.editor.search.ProjectReplace
+import com.codein.ide.editor.format.CodeFormatter
 import com.codein.ide.editor.settings.PreferenceChange
 import com.codein.ide.editor.sora.CursorState
 import com.codein.ide.editor.sora.EditorDiagnostic
@@ -74,6 +77,15 @@ sealed interface WorkspaceIntent {
     data class SearchGlobs(val globs: String) : WorkspaceIntent
     data class SearchOptions(val options: com.codein.ide.editor.search.FindOptions) : WorkspaceIntent
     data class OpenSearchHit(val file: File, val hit: LineHit) : WorkspaceIntent
+    data class SearchReplacement(val text: String) : WorkspaceIntent
+    data object ToggleSearchReplace : WorkspaceIntent
+    data class ToggleReplaceExcluded(val relativePath: String) : WorkspaceIntent
+    data object ReplaceInProject : WorkspaceIntent
+    data class ShowHistory(val relativePath: String) : WorkspaceIntent
+    data class SelectHistoryVersion(val version: LocalHistory.Version?) : WorkspaceIntent
+    data class RestoreHistoryVersion(val version: LocalHistory.Version) : WorkspaceIntent
+    data object CloseHistory : WorkspaceIntent
+    data object FormatDocument : WorkspaceIntent
     data object Build : WorkspaceIntent
     data object CancelBuild : WorkspaceIntent
     data class SetVariant(val variant: BuildVariant) : WorkspaceIntent
@@ -213,6 +225,7 @@ class WorkspaceViewModel @Inject constructor(
                 if (target.exists()) error("${source.name} already exists there")
                 targetDir.mkdirs()
                 if (!source.renameTo(target)) error("Move failed")
+                if (target.isFile) runCatching { LocalHistory.moved(projectDir(), source, target) }
                 val oldPrefix = intent.relativePath
                 val newRel = relative(target)
                 _state.update { s ->
@@ -245,6 +258,7 @@ class WorkspaceViewModel @Inject constructor(
                 validateName(intent.newName)
                 if (target.exists()) error("${intent.newName} already exists")
                 if (!source.renameTo(target)) error("Rename failed")
+                if (target.isFile) runCatching { LocalHistory.moved(projectDir(), source, target) }
                 val oldPrefix = intent.relativePath
                 val newRel = relative(target)
                 _state.update { s ->
@@ -285,6 +299,66 @@ class WorkspaceViewModel @Inject constructor(
             is WorkspaceIntent.SearchGlobs -> { _state.update { it.copy(search = it.search.copy(includeGlobs = intent.globs)) }; runSearch() }
             is WorkspaceIntent.SearchOptions -> { _state.update { it.copy(search = it.search.copy(options = intent.options)) }; runSearch() }
             is WorkspaceIntent.OpenSearchHit -> openFile(relative(intent.file), intent.hit.line, intent.hit.column)
+            is WorkspaceIntent.SearchReplacement -> _state.update { it.copy(search = it.search.copy(replacement = intent.text)) }
+            WorkspaceIntent.ToggleSearchReplace -> _state.update { it.copy(search = it.search.copy(replaceOpen = !it.search.replaceOpen)) }
+            is WorkspaceIntent.ToggleReplaceExcluded -> _state.update { st ->
+                val ex = st.search.excluded
+                st.copy(search = st.search.copy(excluded = if (intent.relativePath in ex) ex - intent.relativePath else ex + intent.relativePath))
+            }
+            WorkspaceIntent.ReplaceInProject -> replaceInProject()
+            is WorkspaceIntent.ShowHistory -> viewModelScope.launch {
+                val dir = _state.value.projectDir ?: return@launch
+                val versions = withContext(Dispatchers.IO) { LocalHistory.versions(dir, File(dir, intent.relativePath)) }
+                _state.update { it.copy(history = FileHistoryUi(intent.relativePath, versions)) }
+                versions.firstOrNull()?.let { onIntent(WorkspaceIntent.SelectHistoryVersion(it)) }
+            }
+            is WorkspaceIntent.SelectHistoryVersion -> viewModelScope.launch {
+                val h = _state.value.history ?: return@launch
+                val version = intent.version
+                if (version == null) { _state.update { it.copy(history = h.copy(selected = null, diff = "")) }; return@launch }
+                val current = currentText(h.relativePath)
+                val diff = withContext(Dispatchers.Default) {
+                    val old = runCatching { version.read() }.getOrDefault("")
+                    LineDiff.unified(h.relativePath, current, old).ifEmpty { "Same as the current text" }
+                }
+                _state.update { st -> st.history?.let { st.copy(history = it.copy(selected = version, diff = diff)) } ?: st }
+            }
+            is WorkspaceIntent.RestoreHistoryVersion -> viewModelScope.launch {
+                val h = _state.value.history ?: return@launch
+                val text = withContext(Dispatchers.IO) { runCatching { intent.version.read() }.getOrNull() } ?: return@launch emit("That version can no longer be read")
+                val stamp = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(intent.version.time))
+                val open = _state.value.tabs.indexOfFirst { it.relativePath == h.relativePath }
+                if (open >= 0) {
+                    // Into the editor as an unsaved change, so Undo and "don't save" still work.
+                    _state.update { st ->
+                        st.copy(
+                            history = null,
+                            activeIndex = open,
+                            tabs = st.tabs.mapIndexed { i, t -> if (i == open) t.copy(content = text, version = versions.getAndIncrement()) else t },
+                        )
+                    }
+                    recomputeMatches()
+                    publishAiContext()
+                    emit("Restored the version from $stamp. Save to keep it.")
+                } else {
+                    val file = File(projectDir(), h.relativePath)
+                    withContext(Dispatchers.IO) { recordHistory(file); file.parentFile?.mkdirs(); file.writeText(text) }
+                    _state.update { it.copy(history = null) }
+                    openFile(h.relativePath)
+                    refreshGit()
+                    emit("Restored the version from $stamp")
+                }
+            }
+            WorkspaceIntent.CloseHistory -> _state.update { it.copy(history = null) }
+            WorkspaceIntent.FormatDocument -> {
+                val tab = _state.value.activeFile ?: return
+                val language = CodeFormatter.languageFor(tab.name) ?: return emit("Codein cannot format ${tab.name.substringAfterLast('.')} files")
+                viewModelScope.launch {
+                    val formatted = withContext(Dispatchers.Default) { CodeFormatter.format(tab.content, language, preferences.value.tabSize) }
+                    if (formatted == tab.content) emit("${tab.name} is already formatted")
+                    else { _commands.tryEmit(EditorCommand.ReplaceAllText(formatted)); emit("Formatted ${tab.name}") }
+                }
+            }
             WorkspaceIntent.Build -> startBuild()
             WorkspaceIntent.CancelBuild -> buildJob?.cancel()
             is WorkspaceIntent.SetVariant -> _state.update { it.copy(build = it.build.copy(variant = intent.variant)) }
@@ -472,9 +546,21 @@ class WorkspaceViewModel @Inject constructor(
         return ok
     }
 
+    /** The open tab's text of [relativePath], or the file's text on disk. */
+    private suspend fun currentText(relativePath: String): String =
+        _state.value.tabs.firstOrNull { it.relativePath == relativePath }?.content
+            ?: withContext(Dispatchers.IO) { runCatching { File(projectDir(), relativePath).readText() }.getOrDefault("") }
+
+    /** Keeps the on-disk text of [file] in local history before Codein overwrites it. */
+    private fun recordHistory(file: File) {
+        val dir = _state.value.projectDir ?: return
+        runCatching { LocalHistory.record(dir, file) }
+    }
+
     private suspend fun write(tab: OpenFile): Boolean {
         val result = withContext(Dispatchers.IO) {
             runCatching {
+                recordHistory(tab.file)
                 val temp = File(tab.file.parentFile, ".${tab.file.name}.codein-tmp")
                 temp.writeText(tab.content)
                 if (!temp.renameTo(tab.file)) {
@@ -609,6 +695,41 @@ class WorkspaceViewModel @Inject constructor(
         _commands.tryEmit(EditorCommand.Select(m.start, m.end))
     }
 
+    /**
+     * Replaces the search matches in every included file and saves them. Open tabs are replaced in
+     * their current (possibly unsaved) text so typing is not lost; each file's old text goes to
+     * local history first.
+     */
+    private fun replaceInProject() {
+        val search = _state.value.search
+        val result = search.result ?: return
+        viewModelScope.launch {
+            val tabsByPath = _state.value.tabs.associateBy { it.file.absolutePath }
+            val (plan, total) = withContext(Dispatchers.IO) {
+                ProjectReplace.plan(result.files, search.excluded, search.query, search.replacement, search.options) { f ->
+                    tabsByPath[f.file.absolutePath]?.content ?: runCatching { f.file.readText() }.getOrNull()
+                }
+            }
+            val written = withContext(Dispatchers.IO) {
+                plan.mapNotNull { (f, text) ->
+                    runCatching {
+                        recordHistory(f.file)
+                        f.file.writeText(text)
+                        f.file.absolutePath to text
+                    }.getOrNull()
+                }.toMap()
+            }
+            _state.update { st ->
+                st.copy(tabs = st.tabs.map { t ->
+                    written[t.file.absolutePath]?.let { text -> t.copy(content = text, savedContent = text, version = versions.getAndIncrement()) } ?: t
+                })
+            }
+            emit("Replaced $total match(es) in ${written.size} file(s)")
+            refreshGit()
+            runSearch()
+        }
+    }
+
     private fun runSearch() {
         val dir = _state.value.projectDir ?: return
         searchJob?.cancel()
@@ -670,7 +791,7 @@ class WorkspaceViewModel @Inject constructor(
                             st.copy(tabs = st.tabs.mapIndexed { i, t -> if (i == openIndex) t.copy(content = result.text, version = versions.getAndIncrement()) else t }, activeIndex = openIndex)
                         }
                     } else {
-                        withContext(Dispatchers.IO) { file.parentFile?.mkdirs(); file.writeText(result.text) }
+                        withContext(Dispatchers.IO) { recordHistory(file); file.parentFile?.mkdirs(); file.writeText(result.text) }
                         refreshTree()
                         openFile(targetRel)
                     }

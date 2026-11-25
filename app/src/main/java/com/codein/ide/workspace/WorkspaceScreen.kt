@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.editor.search.ProjectReplaceActions
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -71,6 +72,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -200,6 +202,8 @@ fun WorkspaceScreen(
     var sidebarTab by rememberSaveable { mutableStateOf(SidebarTab.Files) }
     var sidebarRequest by remember { mutableIntStateOf(0) }
     var signingOpen by rememberSaveable { mutableStateOf(false) }
+    var goToLineOpen by rememberSaveable { mutableStateOf(false) }
+    var shortcutsOpen by rememberSaveable { mutableStateOf(false) }
     var lastConsoleTab by rememberSaveable { mutableStateOf(DockTab.Build) }
     var consoleOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -285,8 +289,37 @@ fun WorkspaceScreen(
             .fillMaxSize()
             .background(CodeinTheme.colors.base)
             .onPreviewKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown || !e.isCtrlPressed) return@onPreviewKeyEvent false
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (e.isAltPressed && !e.isCtrlPressed && (e.key == Key.DirectionUp || e.key == Key.DirectionDown)) {
+                    controller.moveLines(up = e.key == Key.DirectionUp); return@onPreviewKeyEvent true
+                }
+                if (e.key == Key.F5) { onIntent(WorkspaceIntent.Build); return@onPreviewKeyEvent true }
+                if (!e.isCtrlPressed) return@onPreviewKeyEvent false
                 when (e.key) {
+                    Key.L -> if (e.isAltPressed) { onIntent(WorkspaceIntent.FormatDocument); true } else false
+                    Key.W -> { if (state.activeIndex >= 0) onIntent(WorkspaceIntent.CloseTab(state.activeIndex)); true }
+                    Key.Tab, Key.PageDown, Key.PageUp -> {
+                        val n = state.tabs.size
+                        if (n > 1) {
+                            val back = e.isShiftPressed || e.key == Key.PageUp
+                            onIntent(WorkspaceIntent.SelectTab(((state.activeIndex + if (back) -1 else 1) % n + n) % n))
+                        }
+                        true
+                    }
+                    Key.G -> { goToLineOpen = true; true }
+                    Key.D -> { controller.duplicateLines(); true }
+                    Key.K -> if (e.isShiftPressed) { controller.deleteLines(); true } else false
+                    Key.H -> {
+                        if (e.isShiftPressed) {
+                            onIntent(WorkspaceIntent.ShowDock(DockTab.Search))
+                            if (!state.search.replaceOpen) onIntent(WorkspaceIntent.ToggleSearchReplace)
+                        } else onIntent(WorkspaceIntent.OpenFind)
+                        true
+                    }
+                    Key.Grave -> { onIntent(WorkspaceIntent.ShowDock(DockTab.Terminal)); true }
+                    Key.J -> { onIntent(WorkspaceIntent.ShowDock(DockTab.Ai)); true }
+                    Key.E -> { onIntent(WorkspaceIntent.SetPalette(true)); true }
+                    Key.Z -> if (e.isShiftPressed) { controller.redo(); true } else false
                     Key.S -> { onIntent(if (e.isShiftPressed) WorkspaceIntent.SaveAll else WorkspaceIntent.Save); true }
                     Key.P -> { onIntent(WorkspaceIntent.SetPalette(true)); true }
                     Key.O -> { onIntent(WorkspaceIntent.SetPalette(true, "#")); true }
@@ -366,6 +399,14 @@ fun WorkspaceScreen(
                         onGlobsChange = { onIntent(WorkspaceIntent.SearchGlobs(it)) },
                         onOptionsChange = { onIntent(WorkspaceIntent.SearchOptions(it)) },
                         onOpenHit = { f, hit -> onIntent(WorkspaceIntent.OpenSearchHit(f, hit)); onFileOpened() },
+                        replace = remember(onIntent) {
+                            object : ProjectReplaceActions {
+                                override fun onReplacementChange(text: String) = onIntent(WorkspaceIntent.SearchReplacement(text))
+                                override fun onToggleReplace() = onIntent(WorkspaceIntent.ToggleSearchReplace)
+                                override fun onToggleExcluded(relativePath: String) = onIntent(WorkspaceIntent.ToggleReplaceExcluded(relativePath))
+                                override fun onReplaceAll() = onIntent(WorkspaceIntent.ReplaceInProject)
+                            }
+                        },
                     )
                     SidebarTab.Git -> {
                         val git by gitViewModel.state.collectAsStateWithLifecycle()
@@ -506,11 +547,21 @@ fun WorkspaceScreen(
             onOpenSigning = { signingOpen = true },
             onNewProject = onNewProject,
             toggleAi = { onIntent(WorkspaceIntent.ShowDock(DockTab.Ai)) },
+            onGoToLine = { goToLineOpen = true },
+            onShortcuts = { shortcutsOpen = true },
         )
         key(state.paletteQuery) {
             CommandPalette(items = items, onDismiss = { onIntent(WorkspaceIntent.SetPalette(false)) }, initialQuery = state.paletteQuery)
         }
     }
+    state.history?.let { LocalHistoryDialog(it, onIntent) }
+    if (goToLineOpen) {
+        GoToLineDialog(state.cursor.line + 1, onDismiss = { goToLineOpen = false }) { line, column ->
+            goToLineOpen = false
+            onIntent(WorkspaceIntent.GoToLine(line, column))
+        }
+    }
+    if (shortcutsOpen) KeyboardShortcutsDialog { shortcutsOpen = false }
     if (state.preferencesOpen) {
         EditorPreferencesSheet(prefs, onChange = { onIntent(WorkspaceIntent.Preference(it)) }, onDismiss = { onIntent(WorkspaceIntent.SetPreferences(false)) })
     }
@@ -536,6 +587,7 @@ private fun CodeEditorController.execute(command: EditorCommand) {
         EditorCommand.Undo -> undo()
         EditorCommand.Redo -> redo()
         EditorCommand.ToggleComment -> toggleComment()
+        is EditorCommand.ReplaceAllText -> replaceAll(command.text)
     }
 }
 
@@ -896,6 +948,8 @@ private fun rememberPaletteItems(
     onOpenSigning: () -> Unit,
     onNewProject: () -> Unit,
     toggleAi: () -> Unit,
+    onGoToLine: () -> Unit,
+    onShortcuts: () -> Unit,
 ): List<PaletteItem> {
     var files by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(state.projectDir) {
@@ -939,6 +993,12 @@ private fun rememberPaletteItems(
             add(PaletteItem("a:terminal", "Show Terminal", "Android shell in the project folder", PaletteCategory.Action, CodeinIcons.Terminal) { onIntent(WorkspaceIntent.ShowDock(DockTab.Terminal)) })
             add(PaletteItem("a:git", "Source control", "", PaletteCategory.Action, CodeinIcons.GitBranch) { onIntent(WorkspaceIntent.ShowDock(DockTab.Git)) })
             add(PaletteItem("a:deps", "Manage Maven dependencies", "", PaletteCategory.Action, CodeinIcons.Package) { onIntent(WorkspaceIntent.ShowDock(DockTab.Dependencies)) })
+            state.activeFile?.let { f ->
+                add(PaletteItem("a:history", "Local history of ${f.name}", "Earlier versions Codein kept", PaletteCategory.Action, CodeinIcons.History) { onIntent(WorkspaceIntent.ShowHistory(f.relativePath)) })
+            }
+            add(PaletteItem("a:format", "Format document", "Re-indent and tidy the open file", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+Alt+L") { onIntent(WorkspaceIntent.FormatDocument) })
+            add(PaletteItem("a:goto", "Go to line…", "", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+G") { onGoToLine() })
+            add(PaletteItem("a:keys", "Keyboard shortcuts", "For a physical keyboard", PaletteCategory.Action, CodeinIcons.Type) { onShortcuts() })
             add(PaletteItem("a:collapse", "Collapse all folders", "", PaletteCategory.Action, CodeinIcons.CollapseAll) { onIntent(WorkspaceIntent.CollapseAll) })
             add(PaletteItem("a:signing", "Signing & AAB export", "Keystores, SHA fingerprints, signed .aab", PaletteCategory.Build, CodeinIcons.Key) { onOpenSigning() })
             add(PaletteItem("a:new", "New project", "", PaletteCategory.Action, CodeinIcons.Plus) { onNewProject() })
