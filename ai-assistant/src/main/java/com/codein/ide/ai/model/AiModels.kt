@@ -102,4 +102,5 @@ enum class ContextChip(val label: String) {
     BuildError("@BuildErrors"),
     Gradle("@Gradle"),
     FileTree("@FileTree"),
+    Project("@Project"),
 }

@@ -315,7 +315,11 @@ fun WorkspaceScreen(
         }
         val dockContent: @Composable (DockTab, Modifier) -> Unit = { tab, modifier ->
             when (tab) {
-                DockTab.Build -> BuildConsole(state.build, state.toolchain, onIntent, aiFix, onOpenSettings, modifier)
+                DockTab.Build -> BuildConsole(state.build, state.toolchain, onIntent, aiFix, onOpenSettings, modifier, onAiExplain = { d ->
+                    if (d.file != null) onIntent(WorkspaceIntent.JumpToDiagnostic(d))
+                    viewModel.onIntent(WorkspaceIntent.ShowDock(DockTab.Ai))
+                    aiViewModel.explainError(d)
+                })
                 DockTab.Logcat -> {
                     val logcat by logcatViewModel.state.collectAsStateWithLifecycle()
                     LogcatPanel(logcat, logcatViewModel::onIntent, logcatViewModel::start, logcatViewModel::stop, modifier, grantCommand = logcatViewModel.grantCommand)

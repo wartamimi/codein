@@ -101,6 +101,7 @@ fun BuildConsole(
     onAiFix: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onAiExplain: (CompilerDiagnostic) -> Unit = {},
 ) {
     var view by rememberSaveable { mutableStateOf(BuildView.Problems) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -141,7 +142,7 @@ fun BuildConsole(
             label = "build-view",
             modifier = Modifier.weight(1f),
         ) { v ->
-            if (v == BuildView.Log) BuildLog(build) else Problems(build.diagnostics, onIntent, onAiFix)
+            if (v == BuildView.Log) BuildLog(build) else Problems(build.diagnostics, onIntent, onAiFix, onAiExplain)
         }
     }
 }
@@ -263,7 +264,7 @@ private fun ResultBanner(build: BuildUiState, onIntent: (WorkspaceIntent) -> Uni
 }
 
 @Composable
-private fun Problems(diagnostics: List<CompilerDiagnostic>, onIntent: (WorkspaceIntent) -> Unit, onAiFix: () -> Unit) {
+private fun Problems(diagnostics: List<CompilerDiagnostic>, onIntent: (WorkspaceIntent) -> Unit, onAiFix: () -> Unit, onAiExplain: (CompilerDiagnostic) -> Unit) {
     if (diagnostics.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             EmptyState(CodeinIcons.CheckCircle, "No problems", "Errors and warnings from AAPT2, ECJ, Kotlin and D8 appear here.")
@@ -283,6 +284,7 @@ private fun Problems(diagnostics: List<CompilerDiagnostic>, onIntent: (Workspace
                     if (d.file != null) onIntent(WorkspaceIntent.JumpToDiagnostic(d))
                     onAiFix()
                 },
+                onExplain = { onAiExplain(d) },
             )
         }
     }
@@ -290,7 +292,7 @@ private fun Problems(diagnostics: List<CompilerDiagnostic>, onIntent: (Workspace
 
 /** A structured diagnostic: file badge, `Line:Col` pill, concise message and a "Fix with AI" action. */
 @Composable
-private fun DiagnosticCard(d: CompilerDiagnostic, onOpen: () -> Unit, onFix: () -> Unit) {
+private fun DiagnosticCard(d: CompilerDiagnostic, onOpen: () -> Unit, onFix: () -> Unit, onExplain: () -> Unit) {
     val color = when (d.severity) {
         Severity.Error -> MaterialTheme.colorScheme.error
         Severity.Warning -> CodeinTheme.colors.warning
@@ -330,6 +332,7 @@ private fun DiagnosticCard(d: CompilerDiagnostic, onOpen: () -> Unit, onFix: () 
             Spacer(Modifier.weight(1f))
             CountBadge(d.source.name, color)
             if (d.severity == Severity.Error) {
+                PillChip("Explain", icon = CodeinIcons.Bot, modifier = Modifier.padding(start = Spacing.xs), onClick = onExplain)
                 PillChip("Fix with AI", icon = CodeinIcons.Sparkle, selected = true, modifier = Modifier.padding(start = Spacing.xs), onClick = onFix)
             }
             Spacer(Modifier.width(Spacing.xs))

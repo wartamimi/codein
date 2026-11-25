@@ -34,7 +34,11 @@ object AiContextBuilder {
     private const val TREE_BUDGET = 6_000
     private const val ERROR_WINDOW = 6
 
-    val systemPrompt: String = """
+    /** The system prompt, asking for answers in the device language (Codein's users are not all English speakers). */
+    val systemPrompt: String get() = baseSystemPrompt + "\n\nAnswer in " + java.util.Locale.getDefault().getDisplayLanguage(java.util.Locale.ENGLISH) +
+        " unless the user writes in another language; keep code, identifiers and diffs as they are."
+
+    private val baseSystemPrompt: String = """
         You are Codein AI, an expert Android engineer embedded in the Codein on-device IDE.
         The project builds with an on-device toolchain (AAPT2, ECJ Java 8 or kotlinc, D8, apksig),
         not with Gradle itself, so prefer fixes that do not depend on Gradle plugins or annotation processors.
@@ -71,6 +75,16 @@ object AiContextBuilder {
             attached += ContextChip.BuildError
             sb.append("<build_diagnostics>\n").append(renderDiagnostics(snapshot)).append("</build_diagnostics>\n\n")
         }
+        val root = snapshot.projectRoot
+        if (ContextChip.Project in chips && root != null) {
+            val related = ProjectRetriever.relevantFiles(root, question, exclude = path)
+            if (related.isNotEmpty()) {
+                attached += ContextChip.Project
+                related.forEach { (rel, excerpt) ->
+                    sb.append("<project_file path=\"").append(rel).append("\">\n").append(excerpt).append("\n</project_file>\n\n")
+                }
+            }
+        }
         if (ContextChip.Gradle in chips && snapshot.gradleFiles.isNotEmpty()) {
             attached += ContextChip.Gradle
             var remaining = GRADLE_BUDGET
@@ -91,6 +105,13 @@ object AiContextBuilder {
         val where = first?.let { d -> d.file?.let { File(it).name + (d.line?.let { l -> ":$l" } ?: "") } } ?: "the build"
         return "The build failed at $where. Explain the root cause in two or three sentences, then give the minimal fix " +
             "as a unified diff for each affected file."
+    }
+
+    /** "Explain" on one build error: plain words for beginners, then the fix. */
+    fun explainErrorRequest(d: CompilerDiagnostic): String {
+        val where = d.file?.let { File(it).name + (d.line?.let { l -> ":$l" } ?: "") } ?: d.source.name
+        return "Explain this build error for a beginner, in simple words: what it means, why it happened here, " +
+            "and how to fix it. Then give the fix as a unified diff.\n\nError at $where: ${d.message}"
     }
 
     private fun renderDiagnostics(snapshot: AiContextSnapshot): String {

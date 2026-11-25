@@ -36,7 +36,7 @@ data class AiMessage(
 data class AiAssistantState(
     val messages: List<AiMessage> = emptyList(),
     val input: String = "",
-    val chips: Set<ContextChip> = setOf(ContextChip.CurrentFile, ContextChip.BuildError),
+    val chips: Set<ContextChip> = setOf(ContextChip.CurrentFile, ContextChip.BuildError, ContextChip.Project),
     val streaming: Boolean = false,
     val providerLabel: String = "",
     val modelLabel: String = "",
@@ -128,6 +128,11 @@ class AiAssistantViewModel @Inject constructor(
     fun explainAndFix() {
         val chips = _state.value.chips + ContextChip.BuildError + ContextChip.CurrentFile
         ask(AiContextBuilder.explainAndFixRequest(snapshot), chips)
+    }
+
+    /** "Explain" on a single build error in the console. */
+    fun explainError(diagnostic: com.codein.ide.compiler.model.CompilerDiagnostic) {
+        ask(AiContextBuilder.explainErrorRequest(diagnostic), _state.value.chips + ContextChip.BuildError + ContextChip.CurrentFile)
     }
 
     /** Asks about the current selection ("Explain selection" from the editor). */

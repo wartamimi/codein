@@ -145,6 +145,7 @@ private fun ChipRow(state: AiAssistantState, onIntent: (AiIntent) -> Unit) {
                 ContextChip.BuildError -> state.hasBuildError
                 ContextChip.Gradle -> state.hasGradle
                 ContextChip.FileTree -> true
+                ContextChip.Project -> true
             }
             val label = if (chip == ContextChip.CurrentFile && state.currentFileName != null) "@${state.currentFileName}" else chip.label
             PillChip(
