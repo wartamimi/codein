@@ -36,16 +36,32 @@ class MavenSearchService @Inject constructor(private val http: MavenHttpClient) 
             if (MavenRepository.Google.id in repositories) add(async { runCatching { searchGoogle(q, limit) }.getOrDefault(emptyList()) })
             if (MavenRepository.JitPack.id in repositories) add(async { runCatching { searchJitPack(q) }.getOrDefault(emptyList()) })
         }
+        // Everyday names ("retrofit", "image loading") first, with the repository's latest version when it answers.
+        val popular = PopularLibraries.match(q).take(6).map { lib ->
+            async {
+                val latest = runCatching { latestVersion(lib.group, lib.artifact, lib.repository) }.getOrNull()
+                SearchHit(lib.group, lib.artifact, latest ?: lib.fallbackVersion, lib.repository, description = lib.description)
+            }
+        }
+        val popularHits = popular.awaitAll()
         val all = tasks.awaitAll().flatten()
         val lower = q.lowercase()
-        all.distinctBy { "${it.group}:${it.artifact}" }
+        val popularKeys = popularHits.map { "${it.group}:${it.artifact}" }.toSet()
+        popularHits + all.filter { "${it.group}:${it.artifact}" !in popularKeys }.distinctBy { "${it.group}:${it.artifact}" }
             .sortedWith(
                 compareByDescending<SearchHit> { "${it.group}:${it.artifact}".lowercase() == lower }
                     .thenByDescending { it.artifact.lowercase() == lower.substringAfterLast(':') }
                     .thenByDescending { it.artifact.lowercase().startsWith(lower.substringAfterLast(':')) }
                     .thenBy { it.artifact.length },
             )
-            .take(limit)
+            .take((limit - popularHits.size).coerceAtLeast(0))
+    }
+
+    /** Newest stable version from the repository's `maven-metadata.xml`, or null. */
+    private suspend fun latestVersion(group: String, artifact: String, repository: MavenRepository): String? {
+        val text = http.getText("${repository.baseUrl}/${group.replace('.', '/')}/$artifact/maven-metadata.xml") ?: return null
+        val versions = Regex("""<version>([^<]+)</version>""").findAll(text).map { it.groupValues[1].trim() }.toList()
+        return versions.filter(MavenVersion::isStable).maxWithOrNull(MavenVersion) ?: versions.maxWithOrNull(MavenVersion)
     }
 
     private suspend fun searchCentral(query: String, limit: Int): List<SearchHit> {

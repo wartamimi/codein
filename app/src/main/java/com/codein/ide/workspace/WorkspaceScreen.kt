@@ -1,5 +1,14 @@
 package com.codein.ide.workspace
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import com.codein.ide.preview.ColorPickerDialog
+import com.codein.ide.preview.ColorLiteral
+import com.codein.ide.preview.ColorLiterals
+import com.codein.ide.preview.ImageFilePreview
+import com.codein.ide.preview.DrawablePreview
+import com.codein.ide.preview.isDrawableXml
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -577,6 +586,13 @@ fun WorkspaceScreen(
     }
     state.history?.let { LocalHistoryDialog(it, onIntent) }
     state.rename?.let { RenameSymbolDialog(it, onIntent) }
+    state.imagePreview?.let { file ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { onIntent(WorkspaceIntent.CloseImagePreview) }) {
+            androidx.compose.material3.Surface(shape = RoundedCornerShape(16.dp)) {
+                ImageFilePreview(file, Modifier.fillMaxWidth().heightIn(max = 560.dp))
+            }
+        }
+    }
     if (goToLineOpen) {
         GoToLineDialog(state.cursor.line + 1, onDismiss = { goToLineOpen = false }) { line, column ->
             goToLineOpen = false
@@ -739,7 +755,9 @@ private fun EditorArea(
                     TextButton(onClick = onOpenPalette) { Text("Quick open") }
                 }
             } else {
-                val split = layoutMode == 1 && isLayoutFile(active.relativePath)
+                val drawable = isDrawableXml(active.relativePath)
+                val previewable = isLayoutFile(active.relativePath) || drawable
+                val split = layoutMode == 1 && previewable
                 SoraCodeEditor(
                     controller = controller,
                     document = EditorDocument(active.relativePath, active.name, active.content, active.version),
@@ -772,19 +790,44 @@ private fun EditorArea(
                 ) {
                     SelectionActionBar(onSelectionAction)
                 }
-                if (isLayoutFile(active.relativePath)) {
-                    when (layoutMode) {
-                        1 -> LayoutPreview(
+                // Color literal under the cursor: tap the swatch to pick a new color.
+                val colorAtCursor = remember(active.content, state.cursor.line, state.cursor.column) {
+                    if (state.cursor.hasSelection) null else ColorLiterals.at(active.content, state.cursor.line, state.cursor.column)
+                }
+                var pickingColor by remember { mutableStateOf<ColorLiteral?>(null) }
+                colorAtCursor?.argb?.let { argb ->
+                    PillChip(
+                        "Edit ${colorAtCursor.text}",
+                        icon = CodeinIcons.Palette,
+                        onClick = { pickingColor = colorAtCursor },
+                        selected = true,
+                        accent = androidx.compose.ui.graphics.Color(argb.toInt()).copy(alpha = 1f),
+                        modifier = Modifier.align(Alignment.BottomStart).padding(Spacing.md),
+                    )
+                }
+                pickingColor?.let { literal ->
+                    val composeStyle = active.content.substring(literal.start, literal.end).startsWith("0x")
+                    ColorPickerDialog(literal, composeStyle, onDismiss = { pickingColor = null }) { picked ->
+                        pickingColor = null
+                        onIntent(WorkspaceIntent.ReplaceText(literal.start, literal.end, picked))
+                    }
+                }
+                if (previewable) {
+                    val splitModifier = if (wideEditor) Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.5f)
+                    else Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.5f)
+                    when {
+                        layoutMode == 1 && drawable -> DrawablePreview(active.content, state.projectDir, splitModifier)
+                        layoutMode == 2 && drawable -> DrawablePreview(active.content, state.projectDir, Modifier.fillMaxSize())
+                        layoutMode == 1 -> LayoutPreview(
                             active.content,
                             state.projectDir,
-                            modifier = if (wideEditor) Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.5f)
-                            else Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.5f),
+                            modifier = splitModifier,
                             onElementTapped = { line -> onIntent(WorkspaceIntent.GoToLine(line)) },
                         )
-                        2 -> LayoutPreview(active.content, state.projectDir, Modifier.fillMaxSize())
+                        layoutMode == 2 -> LayoutPreview(active.content, state.projectDir, Modifier.fillMaxSize())
                     }
                     PillChip(
-                        when (layoutMode) { 0 -> "Preview layout"; 1 -> "Preview only"; else -> "Show code" },
+                        when (layoutMode) { 0 -> if (drawable) "Preview drawable" else "Preview layout"; 1 -> "Preview only"; else -> "Show code" },
                         icon = if (layoutMode == 2) CodeinIcons.Code else CodeinIcons.Eye,
                         selected = layoutMode != 0,
                         onClick = { layoutMode = (layoutMode + 1) % 3 },
@@ -1054,6 +1097,7 @@ private fun rememberPaletteItems(
             add(PaletteItem("a:format", "Format document", "Re-indent and tidy the open file", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+Alt+L") { onIntent(WorkspaceIntent.FormatDocument) })
             add(PaletteItem("a:goto", "Go to line…", "", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+G") { onGoToLine() })
             add(PaletteItem("a:keys", "Keyboard shortcuts", "For a physical keyboard", PaletteCategory.Action, CodeinIcons.Type) { onShortcuts() })
+            add(PaletteItem("a:zip", "Export project as ZIP", "Share or back up the source (no build outputs)", PaletteCategory.Action, CodeinIcons.Archive) { onIntent(WorkspaceIntent.ExportZip) })
             add(PaletteItem("a:collapse", "Collapse all folders", "", PaletteCategory.Action, CodeinIcons.CollapseAll) { onIntent(WorkspaceIntent.CollapseAll) })
             add(PaletteItem("a:signing", "Signing & AAB export", "Keystores, SHA fingerprints, signed .aab", PaletteCategory.Build, CodeinIcons.Key) { onOpenSigning() })
             add(PaletteItem("a:new", "New project", "", PaletteCategory.Action, CodeinIcons.Plus) { onNewProject() })

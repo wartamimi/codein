@@ -90,6 +90,8 @@ data class WorkspaceState(
     val cursor: CursorState = CursorState(),
     val find: FindBarState = FindBarState(),
     val search: GlobalSearchState = GlobalSearchState(),
+    /** Image file shown in the image viewer, or null. */
+    val imagePreview: File? = null,
     /** Rename-symbol dialog, or null when closed. */
     val rename: RenameSymbolUi? = null,
     /** Local history dialog of one file, or null when closed. */

@@ -1,5 +1,7 @@
 package com.codein.ide.workspace
 
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -125,12 +127,21 @@ fun FileExplorer(
                             .clip(RoundedCornerShape(6.dp))
                             .background(if (active) activeBg else Color.Transparent)
                             .combinedClickable(
+                                onClickLabel = if (row.isDirectory) (if (row.expanded) "Collapse" else "Expand") else "Open",
+                                onLongClickLabel = "File actions",
                                 onClick = {
                                     if (row.isDirectory) onIntent(WorkspaceIntent.ToggleDirectory(row.relativePath))
                                     else { onIntent(WorkspaceIntent.OpenFile(row.relativePath)); onFileOpened() }
                                 },
                                 onLongClick = { menuFor = row.relativePath },
                             )
+                            .semantics(mergeDescendants = true) {
+                                stateDescription = listOfNotNull(
+                                    if (row.isDirectory) (if (row.expanded) "expanded folder" else "collapsed folder") else null,
+                                    gitStatus[row.relativePath]?.name?.lowercase(),
+                                    if (active) "open in editor" else null,
+                                ).joinToString(", ")
+                            }
                             .drawBehind {
                                 // One hairline guide per ancestor directory, centred under its chevron.
                                 val indent = Sizes.TreeIndent.toPx()

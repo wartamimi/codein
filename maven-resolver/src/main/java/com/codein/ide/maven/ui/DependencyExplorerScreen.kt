@@ -90,7 +90,7 @@ private fun SearchTab(state: DependencyExplorerState, onIntent: (DependencyExplo
         CompactTextField(
             value = state.query,
             onValueChange = { onIntent(DependencyExplorerIntent.QueryChanged(it)) },
-            placeholder = "Search artifacts, e.g. retrofit",
+            placeholder = "Search by name: retrofit, glide, room, image loading…",
             leadingIcon = CodeinIcons.Search,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
         )
@@ -154,6 +154,7 @@ private fun SearchHitCard(
             Column(Modifier.weight(1f)) {
                 Text(hit.artifact, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(hit.group, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                hit.description?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
             CountBadge(hit.latestVersion, MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(6.dp))

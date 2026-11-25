@@ -69,6 +69,14 @@ fun HomeScreen(
     var cloneDialog by rememberSaveable { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ProjectEntity?>(null) }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(viewModel::importFolder) }
+    val homeContext = androidx.compose.ui.platform.LocalContext.current
+    val zipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val name = runCatching {
+            homeContext.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        }.getOrNull()
+        viewModel.importZip(uri, name)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { e ->
@@ -115,6 +123,11 @@ fun HomeScreen(
                     ActionCard("New project", "Compose or Views template", CodeinIcons.Plus, Modifier.weight(1f), enabled = busy == null, onClick = onNewProject)
                     ActionCard("Open folder", "Import via file picker", CodeinIcons.FolderOpen, Modifier.weight(1f), enabled = busy == null) { importLauncher.launch(null) }
                     ActionCard("Clone", "From a Git URL", CodeinIcons.GitBranch, Modifier.weight(1f), enabled = busy == null) { cloneDialog = true }
+                }
+                Row(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ActionCard("Import ZIP", "A zipped project or GitHub download", CodeinIcons.Archive, Modifier.weight(1f), enabled = busy == null) {
+                        zipLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                    }
                 }
             }
             item {

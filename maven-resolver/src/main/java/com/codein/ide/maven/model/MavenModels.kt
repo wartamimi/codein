@@ -89,6 +89,8 @@ data class SearchHit(
     val repository: MavenRepository,
     val packaging: String? = null,
     val versionCount: Int? = null,
+    /** Plain-language description for well-known libraries matched by name. */
+    val description: String? = null,
 ) {
     val coordinate: MavenCoordinate get() = MavenCoordinate(group, artifact, latestVersion)
 }

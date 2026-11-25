@@ -86,6 +86,10 @@ sealed interface WorkspaceIntent {
     data class RestoreHistoryVersion(val version: LocalHistory.Version) : WorkspaceIntent
     data object CloseHistory : WorkspaceIntent
     data object FormatDocument : WorkspaceIntent
+    data object ExportZip : WorkspaceIntent
+    data object CloseImagePreview : WorkspaceIntent
+    /** Replaces [start, end) of the active file in the editor (undoable). */
+    data class ReplaceText(val start: Int, val end: Int, val text: String) : WorkspaceIntent
     /** Opens rename for the selection or the word at the cursor. */
     data object StartRenameSymbol : WorkspaceIntent
     data class RenameSymbol(val newName: String) : WorkspaceIntent
@@ -393,6 +397,16 @@ class WorkspaceViewModel @Inject constructor(
                     emit("Renamed ${rename.symbol} to $newName: $total use(s) in $files file(s)" + (moved?.let { ", file renamed to $it" } ?: ""))
                 }
             }
+            WorkspaceIntent.CloseImagePreview -> _state.update { it.copy(imagePreview = null) }
+            is WorkspaceIntent.ReplaceText -> _commands.tryEmit(EditorCommand.ReplaceRange(intent.start, intent.end, intent.text))
+            WorkspaceIntent.ExportZip -> viewModelScope.launch {
+                val dir = _state.value.projectDir ?: return@launch
+                saveAll()
+                emit("Packing ${dir.name}…")
+                runCatching { projects.exportZip(dir) }
+                    .onSuccess { _effects.tryEmit(WorkspaceEffect.ShareFile(it, "application/zip")) }
+                    .onFailure { emit("Could not create the ZIP: ${it.message}") }
+            }
             WorkspaceIntent.FormatDocument -> {
                 val tab = _state.value.activeFile ?: return
                 val language = CodeFormatter.languageFor(tab.name) ?: return emit("Codein cannot format ${tab.name.substringAfterLast('.')} files")
@@ -484,6 +498,10 @@ class WorkspaceViewModel @Inject constructor(
         if (existing >= 0) {
             selectTab(existing)
             if (line != null) _commands.tryEmit(EditorCommand.GoTo(line, column ?: 1))
+            return
+        }
+        if (com.codein.ide.preview.isImageFile(relativePath)) {
+            _state.update { it.copy(imagePreview = File(projectDir(), relativePath)) }
             return
         }
         viewModelScope.launch {

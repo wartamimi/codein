@@ -55,6 +55,13 @@ class HomeViewModel @Inject constructor(
         )
     }
 
+    fun importZip(uri: Uri, displayName: String?) = run("Unpacking project") {
+        projects.importZip(uri, displayName).fold(
+            onSuccess = { _events.emit(HomeEvent.OpenProject(it.absolutePath)) },
+            onFailure = { _events.emit(HomeEvent.Message(it.message ?: "Import failed")) },
+        )
+    }
+
     fun clone(url: String) = run("Cloning repository") {
         val name = url.trim().trimEnd('/').substringAfterLast('/').removeSuffix(".git").ifEmpty { "Cloned" }
         val target = projects.newCloneTarget(name)

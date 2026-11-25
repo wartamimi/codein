@@ -91,6 +91,29 @@ class ProjectRepository @Inject constructor(
         }
     }
 
+    /** Unpacks a project ZIP chosen with ACTION_OPEN_DOCUMENT into private storage. */
+    suspend fun importZip(uri: Uri, displayName: String?): Result<File> = withContext(Dispatchers.IO) {
+        val dir = uniqueDir(displayName?.substringBeforeLast('.')?.ifBlank { null } ?: "Imported")
+        runCatching {
+            val input = context.contentResolver.openInputStream(uri) ?: error("Cannot read the selected file")
+            input.use { ProjectZip.import(it, dir) }
+            if (!ProjectZip.looksLikeProject(dir)) {
+                dir.deleteRecursively()
+                error("The ZIP does not contain an Android Gradle project (no settings.gradle or app/ module)")
+            }
+            register(dir)
+            dir
+        }.onFailure { dir.deleteRecursively() }
+    }
+
+    /** Zips [dir] into the app's cache for sharing; returns the ZIP. */
+    suspend fun exportZip(dir: File): File = withContext(Dispatchers.IO) {
+        val out = File(context.cacheDir, "exports/${dir.name}.zip")
+        out.delete()
+        ProjectZip.export(dir, out)
+        out
+    }
+
     /** Registers an existing directory (e.g. a fresh Git clone) as a project. */
     suspend fun register(dir: File) {
         val settings = runCatching { gradleParser.parseSettings(dir) }.getOrNull()

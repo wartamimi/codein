@@ -1,5 +1,7 @@
 package com.codein.ide.editor.keys
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -127,6 +129,40 @@ fun ExtraKeysBar(
 
 private val KeyShape = RoundedCornerShape(Sizes.KeyPillCorner)
 
+/** What TalkBack reads for a symbol key, since many screen readers skip punctuation. */
+private fun spokenSymbol(label: String): String = when (label) {
+    "{" -> "open brace"
+    "}" -> "close brace"
+    "(" -> "open parenthesis"
+    ")" -> "close parenthesis"
+    "[" -> "open bracket"
+    "]" -> "close bracket"
+    "<" -> "less than"
+    ">" -> "greater than"
+    ";" -> "semicolon"
+    ":" -> "colon"
+    "." -> "dot"
+    "," -> "comma"
+    "=" -> "equals"
+    "\"" -> "double quote"
+    "'" -> "single quote"
+    "/" -> "slash"
+    "\\" -> "backslash"
+    "|" -> "pipe"
+    "&" -> "ampersand"
+    "!" -> "exclamation mark"
+    "?" -> "question mark"
+    "-" -> "minus"
+    "+" -> "plus"
+    "*" -> "asterisk"
+    "_" -> "underscore"
+    "$" -> "dollar"
+    "#" -> "hash"
+    "@" -> "at"
+    "%" -> "percent"
+    else -> label
+}
+
 @Composable
 private fun TextKey(label: String, onClick: () -> Unit) {
     Box(
@@ -136,7 +172,8 @@ private fun TextKey(label: String, onClick: () -> Unit) {
             .clip(KeyShape)
             .background(CodeinTheme.colors.tier2)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, KeyShape)
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = "Type ${spokenSymbol(label)}", onClick = onClick)
+            .semantics { contentDescription = spokenSymbol(label) }
             .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
     ) {

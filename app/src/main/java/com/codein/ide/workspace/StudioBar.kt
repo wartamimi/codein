@@ -1,5 +1,8 @@
 package com.codein.ide.workspace
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -307,7 +310,11 @@ private fun EditorTab(
         modifier
             .fillMaxHeight()
             .background(bg)
-            .combinedClickable(onClick = onSelect, onLongClick = onCloseOthers)
+            .combinedClickable(onClickLabel = "Show ${tab.name}", onLongClickLabel = "Close other tabs", onClick = onSelect, onLongClick = onCloseOthers)
+            .semantics {
+                selected = active
+                stateDescription = if (tab.isDirty) "unsaved changes" else ""
+            }
             .padding(start = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
