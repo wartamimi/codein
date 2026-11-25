@@ -78,6 +78,7 @@ val KeyboardShortcuts: List<Pair<String, String>> = listOf(
     "Ctrl+Shift+F" to "Search in project",
     "Ctrl+Shift+H" to "Replace in project",
     "Ctrl+Alt+L" to "Format document",
+    "F2 / Shift+F6" to "Rename symbol in all files",
     "Ctrl+/" to "Toggle comment",
     "Ctrl+D" to "Duplicate line",
     "Ctrl+Shift+K" to "Delete line",
@@ -106,5 +107,58 @@ fun KeyboardShortcutsDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/** F2: rename a class, function or variable in every Kotlin, Java, XML and Gradle file. */
+@Composable
+fun RenameSymbolDialog(rename: RenameSymbolUi, onIntent: (WorkspaceIntent) -> Unit) {
+    var value by rememberSaveable(rename.symbol) { mutableStateOf(rename.symbol) }
+    val valid = Regex("[A-Za-z_][A-Za-z0-9_]*").matches(value.trim()) && value.trim() != rename.symbol
+    val uses = rename.uses
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    AlertDialog(
+        onDismissRequest = { onIntent(WorkspaceIntent.CancelRenameSymbol) },
+        title = { Text("Rename ${rename.symbol}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text("New name") },
+                    singleLine = true,
+                    isError = value.isNotBlank() && !Regex("[A-Za-z_][A-Za-z0-9_]*").matches(value.trim()),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, autoCorrectEnabled = false),
+                    keyboardActions = KeyboardActions(onDone = { if (valid && uses != null) onIntent(WorkspaceIntent.RenameSymbol(value)) }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+                Text(
+                    when {
+                        rename.searching -> "Finding uses…"
+                        uses == null || uses.totalHits == 0 -> "No uses found"
+                        else -> "${uses.totalHits} use(s) in ${uses.files.size} file(s)" + (rename.fileToRename?.let { " · renames $it" } ?: "")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CodeinTheme.colors.textMuted,
+                )
+                if (uses != null && uses.files.isNotEmpty()) {
+                    Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
+                        uses.files.forEach { f ->
+                            Text("${f.relativePath}  (${f.hits.size})", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = CodeinTheme.colors.textMuted)
+                        }
+                    }
+                }
+                Text(
+                    "Matches whole words with the same case, including comments and strings. Each file's old text is kept in local history.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CodeinTheme.colors.textMuted,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onIntent(WorkspaceIntent.RenameSymbol(value)) }, enabled = valid && uses != null && uses.totalHits > 0) { Text("Rename") }
+        },
+        dismissButton = { TextButton(onClick = { onIntent(WorkspaceIntent.CancelRenameSymbol) }) { Text("Cancel") } },
     )
 }

@@ -86,6 +86,10 @@ sealed interface WorkspaceIntent {
     data class RestoreHistoryVersion(val version: LocalHistory.Version) : WorkspaceIntent
     data object CloseHistory : WorkspaceIntent
     data object FormatDocument : WorkspaceIntent
+    /** Opens rename for the selection or the word at the cursor. */
+    data object StartRenameSymbol : WorkspaceIntent
+    data class RenameSymbol(val newName: String) : WorkspaceIntent
+    data object CancelRenameSymbol : WorkspaceIntent
     data object Build : WorkspaceIntent
     data object CancelBuild : WorkspaceIntent
     data class SetVariant(val variant: BuildVariant) : WorkspaceIntent
@@ -98,6 +102,8 @@ sealed interface WorkspaceIntent {
     data class Preference(val change: PreferenceChange) : WorkspaceIntent
     data class Key(val key: ExtraKey) : WorkspaceIntent
     data class ApplyPatch(val patch: FilePatch) : WorkspaceIntent
+    /** Puts back the text a file had before the last applied AI diff. */
+    data object UndoPatch : WorkspaceIntent
     data class InsertCode(val code: String) : WorkspaceIntent
     data object InstallOutput : WorkspaceIntent
     data object ShareOutput : WorkspaceIntent
@@ -154,6 +160,7 @@ class WorkspaceViewModel @Inject constructor(
             refreshTree()
             refreshGit()
             restoreTabs(dir)
+            launch { loadBuildHistory(dir) }
             publishAiContext()
         }
     }
@@ -350,6 +357,42 @@ class WorkspaceViewModel @Inject constructor(
                 }
             }
             WorkspaceIntent.CloseHistory -> _state.update { it.copy(history = null) }
+            WorkspaceIntent.StartRenameSymbol -> {
+                val dir = _state.value.projectDir ?: return
+                val tab = _state.value.activeFile ?: return emit("Open a file and put the cursor on a name")
+                val symbol = _state.value.cursor.selectedText.trim().takeIf { identifier.matches(it) }
+                    ?: wordAt(tab.content, _state.value.cursor.line, _state.value.cursor.column)
+                    ?: return emit("Put the cursor on a class, function or variable name")
+                _state.update { it.copy(rename = RenameSymbolUi(symbol)) }
+                viewModelScope.launch {
+                    val uses = ProjectSearchEngine.search(dir, symbol, renameOptions, RENAME_GLOBS, maxHits = 20_000)
+                    _state.update { st -> st.rename?.takeIf { it.symbol == symbol }?.let { st.copy(rename = it.copy(uses = uses, searching = false)) } ?: st }
+                }
+            }
+            WorkspaceIntent.CancelRenameSymbol -> _state.update { it.copy(rename = null) }
+            is WorkspaceIntent.RenameSymbol -> {
+                val rename = _state.value.rename ?: return
+                val uses = rename.uses ?: return
+                val newName = intent.newName.trim()
+                if (!identifier.matches(newName)) return emit("\"$newName\" is not a valid name")
+                _state.update { it.copy(rename = null) }
+                viewModelScope.launch {
+                    val (total, files) = replaceEverywhere(uses, emptySet(), rename.symbol, newName, renameOptions)
+                    // class Foo in Foo.kt: rename the file too, as Android Studio does.
+                    val moved = rename.fileToRename?.let { rel ->
+                        val source = File(projectDir(), rel)
+                        val target = File(source.parentFile, newName + "." + source.extension)
+                        if (target.exists() || !withContext(Dispatchers.IO) { source.renameTo(target) }) return@let null
+                        runCatching { LocalHistory.moved(projectDir(), source, target) }
+                        val newRel = relative(target)
+                        _state.update { st -> st.copy(tabs = st.tabs.map { t -> if (t.relativePath == rel) t.copy(relativePath = newRel, file = target) else t }) }
+                        persistTabs()
+                        target.name
+                    }
+                    refreshTree()
+                    emit("Renamed ${rename.symbol} to $newName: $total use(s) in $files file(s)" + (moved?.let { ", file renamed to $it" } ?: ""))
+                }
+            }
             WorkspaceIntent.FormatDocument -> {
                 val tab = _state.value.activeFile ?: return
                 val language = CodeFormatter.languageFor(tab.name) ?: return emit("Codein cannot format ${tab.name.substringAfterLast('.')} files")
@@ -371,6 +414,7 @@ class WorkspaceViewModel @Inject constructor(
             is WorkspaceIntent.Preference -> viewModelScope.launch { applyPreference(intent.change) }
             is WorkspaceIntent.Key -> onExtraKey(intent.key)
             is WorkspaceIntent.ApplyPatch -> applyPatch(intent.patch)
+            WorkspaceIntent.UndoPatch -> undoPatch()
             is WorkspaceIntent.InsertCode -> {
                 if (_state.value.activeFile == null) emit("Open a file first to insert code")
                 else _commands.tryEmit(EditorCommand.Insert(intent.code))
@@ -704,30 +748,59 @@ class WorkspaceViewModel @Inject constructor(
         val search = _state.value.search
         val result = search.result ?: return
         viewModelScope.launch {
-            val tabsByPath = _state.value.tabs.associateBy { it.file.absolutePath }
-            val (plan, total) = withContext(Dispatchers.IO) {
-                ProjectReplace.plan(result.files, search.excluded, search.query, search.replacement, search.options) { f ->
-                    tabsByPath[f.file.absolutePath]?.content ?: runCatching { f.file.readText() }.getOrNull()
-                }
-            }
-            val written = withContext(Dispatchers.IO) {
-                plan.mapNotNull { (f, text) ->
-                    runCatching {
-                        recordHistory(f.file)
-                        f.file.writeText(text)
-                        f.file.absolutePath to text
-                    }.getOrNull()
-                }.toMap()
-            }
-            _state.update { st ->
-                st.copy(tabs = st.tabs.map { t ->
-                    written[t.file.absolutePath]?.let { text -> t.copy(content = text, savedContent = text, version = versions.getAndIncrement()) } ?: t
-                })
-            }
-            emit("Replaced $total match(es) in ${written.size} file(s)")
-            refreshGit()
+            val (total, files) = replaceEverywhere(result, search.excluded, search.query, search.replacement, search.options)
+            emit("Replaced $total match(es) in $files file(s)")
             runSearch()
         }
+    }
+
+    /** Writes the replacement into every file of [result] (open tabs included); returns matches and files changed. */
+    private suspend fun replaceEverywhere(
+        result: com.codein.ide.editor.search.ProjectSearchResult,
+        excluded: Set<String>,
+        query: String,
+        replacement: String,
+        options: com.codein.ide.editor.search.FindOptions,
+    ): Pair<Int, Int> {
+        val tabsByPath = _state.value.tabs.associateBy { it.file.absolutePath }
+        val (plan, total) = withContext(Dispatchers.IO) {
+            ProjectReplace.plan(result.files, excluded, query, replacement, options) { f ->
+                tabsByPath[f.file.absolutePath]?.content ?: runCatching { f.file.readText() }.getOrNull()
+            }
+        }
+        val written = withContext(Dispatchers.IO) {
+            plan.mapNotNull { (f, text) ->
+                runCatching {
+                    recordHistory(f.file)
+                    f.file.writeText(text)
+                    f.file.absolutePath to text
+                }.getOrNull()
+            }.toMap()
+        }
+        _state.update { st ->
+            st.copy(tabs = st.tabs.map { t ->
+                written[t.file.absolutePath]?.let { text -> t.copy(content = text, savedContent = text, version = versions.getAndIncrement()) } ?: t
+            })
+        }
+        recomputeMatches()
+        publishAiContext()
+        refreshGit()
+        return total to written.size
+    }
+
+    private val identifier = Regex("[A-Za-z_][A-Za-z0-9_]*")
+    private val renameOptions = com.codein.ide.editor.search.FindOptions(regex = false, matchCase = true, wholeWord = true)
+
+    /** The identifier at 0-based [line]/[column] of [text], or null. */
+    private fun wordAt(text: String, line: Int, column: Int): String? {
+        val lineText = text.lineSequence().drop(line).firstOrNull() ?: return null
+        if (lineText.isEmpty()) return null
+        var start = column.coerceIn(0, lineText.length)
+        var end = start
+        fun part(c: Char) = c.isLetterOrDigit() || c == '_'
+        while (start > 0 && part(lineText[start - 1])) start--
+        while (end < lineText.length && part(lineText[end])) end++
+        return lineText.substring(start, end).takeIf { identifier.matches(it) }
     }
 
     private fun runSearch() {
@@ -771,6 +844,44 @@ class WorkspaceViewModel @Inject constructor(
         }
     }
 
+    /** File and text before the last AI diff; [existed] is false when the diff created the file. */
+    private data class PatchUndo(val relativePath: String, val text: String, val existed: Boolean)
+    private var lastPatchUndo: PatchUndo? = null
+
+    private fun undoPatch() {
+        val undo = lastPatchUndo ?: return emit("Nothing to undo")
+        lastPatchUndo = null
+        viewModelScope.launch {
+            val file = File(projectDir(), undo.relativePath)
+            val openIndex = _state.value.tabs.indexOfFirst { it.relativePath == undo.relativePath }
+            if (!undo.existed) {
+                if (openIndex >= 0) closeTabQuietly(openIndex)
+                withContext(Dispatchers.IO) { file.delete() }
+                refreshTree()
+                emit("Removed ${file.name}, which the AI diff had created")
+            } else if (openIndex >= 0) {
+                _state.update { st ->
+                    st.copy(tabs = st.tabs.mapIndexed { i, t -> if (i == openIndex) t.copy(content = undo.text, version = versions.getAndIncrement()) else t })
+                }
+                emit("Undid the AI change to ${file.name}")
+            } else {
+                withContext(Dispatchers.IO) { file.writeText(undo.text) }
+                emit("Undid the AI change to ${file.name}")
+            }
+            recomputeMatches()
+            publishAiContext()
+            refreshGit()
+        }
+    }
+
+    private fun closeTabQuietly(index: Int) {
+        _state.update { st ->
+            val tabs = st.tabs.filterIndexed { i, _ -> i != index }
+            st.copy(tabs = tabs, activeIndex = if (tabs.isEmpty()) -1 else st.activeIndex.coerceAtMost(tabs.lastIndex))
+        }
+        persistTabs()
+    }
+
     private fun applyPatch(patch: FilePatch) {
         viewModelScope.launch {
             val s = _state.value
@@ -786,6 +897,7 @@ class WorkspaceViewModel @Inject constructor(
             when (val result = UnifiedDiff.apply(original, patch)) {
                 is PatchResult.Failed -> emit("Could not apply diff to ${file.name}: ${result.reason}")
                 is PatchResult.Applied -> {
+                    lastPatchUndo = PatchUndo(targetRel, original, existed = openIndex >= 0 || file.isFile)
                     if (openIndex >= 0) {
                         _state.update { st ->
                             st.copy(tabs = st.tabs.mapIndexed { i, t -> if (i == openIndex) t.copy(content = result.text, version = versions.getAndIncrement()) else t }, activeIndex = openIndex)
@@ -796,7 +908,7 @@ class WorkspaceViewModel @Inject constructor(
                         openFile(targetRel)
                     }
                     val fuzzy = if (result.fuzzyHunks > 0) " (${result.fuzzyHunks} matched ignoring whitespace)" else ""
-                    emit("Applied ${result.hunksApplied} hunk(s) to ${file.name}$fuzzy. Review, then save.")
+                    _effects.tryEmit(WorkspaceEffect.Message("Applied ${result.hunksApplied} change(s) to ${file.name}$fuzzy. Review, then save.", "Undo", WorkspaceIntent.UndoPatch))
                     recomputeMatches()
                     publishAiContext()
                     refreshGit()
@@ -845,7 +957,7 @@ class WorkspaceViewModel @Inject constructor(
                 it.copy(
                     dockVisible = true,
                     dockTab = DockTab.Build,
-                    build = BuildUiState(running = true, variant = variant, startedAt = System.currentTimeMillis()),
+                    build = BuildUiState(running = true, variant = variant, startedAt = System.currentTimeMillis(), history = it.build.history, outputSize = it.build.outputSize),
                     toolchain = toolchain.status(),
                 )
             }
@@ -872,8 +984,49 @@ class WorkspaceViewModel @Inject constructor(
                 }
                 publishAiContext()
                 refreshTree()
+                // Also after Cancel: the job is cancelled, so record outside its cancellation.
+                withContext(kotlinx.coroutines.NonCancellable) { recordBuild(dir, variant) }
             }
         }
+    }
+
+    private suspend fun loadBuildHistory(dir: File) {
+        val history = withContext(Dispatchers.IO) { runCatching { BuildHistory.load(dir) }.getOrDefault(emptyList()) }
+        val size = withContext(Dispatchers.IO) {
+            history.firstOrNull { it.outcome == BuildRecord.Outcome.Success }?.outputPath?.let(::File)?.takeIf { it.isFile }?.let(ApkSizeAnalyzer::analyze)
+        }
+        _state.update { it.copy(build = it.build.copy(history = history, outputSize = size)) }
+    }
+
+    /** Adds the finished build to the History tab and measures its APK/AAB. */
+    private suspend fun recordBuild(dir: File, variant: BuildVariant) {
+        val build = _state.value.build
+        val result = build.result ?: return
+        val output = (result as? BuildResult.Success)?.output
+        val record = BuildRecord(
+            time = System.currentTimeMillis(),
+            variant = variant.displayName,
+            outcome = when (result) {
+                is BuildResult.Success -> BuildRecord.Outcome.Success
+                is BuildResult.Failure -> BuildRecord.Outcome.Failure
+                is BuildResult.Cancelled -> BuildRecord.Outcome.Cancelled
+            },
+            durationMillis = result.durationMillis,
+            errors = build.diagnostics.count { it.severity == Severity.Error },
+            warnings = build.diagnostics.count { it.severity == Severity.Warning },
+            outputBytes = output?.length() ?: 0,
+            summary = when (result) {
+                is BuildResult.Success -> output?.name.orEmpty()
+                is BuildResult.Failure -> "${result.failedStep.title}: " + (result.diagnostics.firstOrNull { it.severity == Severity.Error }?.message?.take(160) ?: "failed")
+                is BuildResult.Cancelled -> "Cancelled"
+            },
+            outputPath = output?.absolutePath,
+        )
+        val (history, size) = withContext(Dispatchers.IO) {
+            val h = runCatching { BuildHistory.append(dir, record) }.getOrElse { listOf(record) + build.history }
+            h to (output?.let(ApkSizeAnalyzer::analyze) ?: build.outputSize)
+        }
+        _state.update { it.copy(build = it.build.copy(history = history, outputSize = size)) }
     }
 
     private fun onBuildEvent(event: BuildEvent) {
@@ -996,6 +1149,7 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     private companion object {
+        const val RENAME_GLOBS = "*.kt, *.java, *.xml, *.kts, *.gradle"
         const val MAX_OPEN_BYTES = 4L * 1024 * 1024
         const val AUTO_SAVE_DELAY_MS = 1200L
         const val LIVE_CHECK_DELAY_MS = 900L

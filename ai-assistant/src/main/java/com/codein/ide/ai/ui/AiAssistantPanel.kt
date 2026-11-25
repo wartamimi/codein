@@ -1,5 +1,10 @@
 package com.codein.ide.ai.ui
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import com.codein.ide.core.ui.theme.metricsTextStyle
 import com.codein.ide.core.ui.theme.Spacing
@@ -375,6 +380,9 @@ private fun DiffCard(block: MdBlock.Diff, onApplyDiff: (FilePatch) -> Unit) {
         return
     }
     block.patches.forEach { patch ->
+        // Each hunk can be left out; the patch applied to the editor keeps only the chosen ones.
+        var skipped by remember(patch) { mutableStateOf(emptySet<Int>()) }
+        val chosen = patch.hunks.filterIndexed { i, _ -> i !in skipped }
         Column(
             Modifier
                 .fillMaxWidth()
@@ -395,13 +403,24 @@ private fun DiffCard(block: MdBlock.Diff, onApplyDiff: (FilePatch) -> Unit) {
             }
             Column(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = Spacing.xs)) {
                 val gutter = metricsTextStyle(prefs.codingFont, 11f)
-                patch.hunks.forEach { hunk ->
-                    Text(
-                        "@@ -${hunk.oldStart.coerceAtLeast(0)},${hunk.oldCount} +${hunk.newStart.coerceAtLeast(0)},${hunk.newCount} @@",
-                        style = style,
-                        color = scheme.comment,
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp),
-                    )
+                patch.hunks.forEachIndexed { hunkIndex, hunk ->
+                    val included = hunkIndex !in skipped
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (patch.hunks.size > 1) {
+                            Checkbox(
+                                checked = included,
+                                onCheckedChange = { skipped = if (it) skipped - hunkIndex else skipped + hunkIndex },
+                                modifier = Modifier.size(36.dp).semantics { contentDescription = "Apply change ${hunkIndex + 1}" },
+                            )
+                        }
+                        Text(
+                            "@@ -${hunk.oldStart.coerceAtLeast(0)},${hunk.oldCount} +${hunk.newStart.coerceAtLeast(0)},${hunk.newCount} @@" + if (!included) "  (skipped)" else "",
+                            style = style,
+                            color = scheme.comment,
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp),
+                        )
+                    }
+                    if (!included) return@forEachIndexed
                     var oldLine = hunk.oldStart.coerceAtLeast(1)
                     var newLine = hunk.newStart.coerceAtLeast(1)
                     hunk.lines.forEach { line ->
@@ -424,7 +443,9 @@ private fun DiffCard(block: MdBlock.Diff, onApplyDiff: (FilePatch) -> Unit) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.xs), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 if (!block.complete) Text("Streaming…", style = MaterialTheme.typography.labelMedium, color = CodeinTheme.colors.textMuted, modifier = Modifier.weight(1f))
-                PillChip("Apply to Editor", icon = CodeinIcons.Check, selected = block.complete, onClick = if (block.complete) ({ onApplyDiff(patch) }) else null)
+                val label = if (chosen.size == patch.hunks.size) "Apply to Editor" else "Apply ${chosen.size} of ${patch.hunks.size} changes"
+                val ready = block.complete && chosen.isNotEmpty()
+                PillChip(label, icon = CodeinIcons.Check, selected = ready, onClick = if (ready) ({ onApplyDiff(patch.copy(hunks = chosen)) }) else null)
             }
         }
     }

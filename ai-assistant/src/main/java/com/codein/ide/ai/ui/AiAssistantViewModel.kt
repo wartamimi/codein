@@ -11,7 +11,9 @@ import com.codein.ide.ai.model.StreamEvent
 import com.codein.ide.ai.net.LlmClient
 import com.codein.ide.ai.settings.AiSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -89,8 +91,22 @@ class AiAssistantViewModel @Inject constructor(
         }
     }
 
+    private var chatProject: File? = null
+
     fun updateContext(newSnapshot: AiContextSnapshot) {
         snapshot = newSnapshot
+        val root = newSnapshot.projectRoot
+        if (root != null && root != chatProject) {
+            // Another project: save the old chat and bring back this project's own.
+            chatProject?.let { old -> persist(old, _state.value.messages) }
+            stop()
+            chatProject = root
+            _state.update { it.copy(messages = emptyList()) }
+            viewModelScope.launch {
+                val restored = withContext(Dispatchers.IO) { ChatHistoryStore.load(root) { ids.getAndIncrement() } }
+                if (chatProject == root && _state.value.messages.isEmpty()) _state.update { it.copy(messages = restored) }
+            }
+        }
         _state.update {
             it.copy(
                 currentFileName = newSnapshot.currentFilePath?.let { p -> File(p).name },
@@ -118,6 +134,7 @@ class AiAssistantViewModel @Inject constructor(
             AiIntent.Clear -> {
                 stop()
                 _state.update { it.copy(messages = emptyList()) }
+                save()
             }
             AiIntent.ExplainAndFix -> explainAndFix()
             AiIntent.Retry -> retry()
@@ -136,9 +153,20 @@ class AiAssistantViewModel @Inject constructor(
     }
 
     /** Asks about the current selection ("Explain selection" from the editor). */
-    fun explainSelection() {
+    fun explainSelection() = selectionAction(SelectionAction.Explain)
+
+    /** What the floating selection bar can ask the AI to do with the selected code. */
+    enum class SelectionAction(val label: String, val request: String) {
+        Explain("Explain", "Explain what the selected code does, step by step, and point out any bugs."),
+        Fix("Fix", "Find and fix the bugs in the selected code. Reply with a unified diff against the current file."),
+        Refactor("Refactor", "Refactor the selected code to be clearer and more idiomatic without changing behavior. Reply with a unified diff against the current file."),
+        Comment("Document", "Add concise KDoc/Javadoc and comments to the selected code. Reply with a unified diff against the current file."),
+        Test("Write tests", "Write unit tests for the selected code using JUnit 4. Put them in a code block with the file path as the first comment."),
+    }
+
+    fun selectionAction(action: SelectionAction) {
         if (snapshot.selectionText.isBlank()) return
-        ask("Explain what the selected code does and point out any bugs.", _state.value.chips + ContextChip.Selection)
+        ask(action.request, _state.value.chips + ContextChip.Selection + ContextChip.CurrentFile)
     }
 
     private fun retry() {
@@ -204,7 +232,22 @@ class AiAssistantViewModel @Inject constructor(
             }
             updateMessage(assistantId) { if (it.streaming) it.copy(text = buffer.toString(), streaming = false) else it }
             _state.update { it.copy(streaming = false) }
+            save()
         }
+    }
+
+    private fun save() {
+        val root = chatProject ?: return
+        persist(root, _state.value.messages)
+    }
+
+    private fun persist(root: File, messages: List<AiMessage>) {
+        viewModelScope.launch(Dispatchers.IO) { runCatching { ChatHistoryStore.save(root, messages) } }
+    }
+
+    override fun onCleared() {
+        val root = chatProject ?: return
+        runCatching { ChatHistoryStore.save(root, _state.value.messages) }
     }
 
     private fun updateMessage(id: Long, transform: (AiMessage) -> AiMessage) {

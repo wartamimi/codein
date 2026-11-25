@@ -1,5 +1,14 @@
 package com.codein.ide.workspace
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
 import com.codein.ide.editor.search.ProjectReplaceActions
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.animation.AnimatedContent
@@ -246,7 +255,14 @@ fun WorkspaceScreen(
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is WorkspaceEffect.Message -> snackbar.showSnackbar(effect.text)
+                is WorkspaceEffect.Message -> {
+                    val result = snackbar.showSnackbar(
+                        effect.text,
+                        actionLabel = effect.actionLabel,
+                        duration = if (effect.actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) (effect.action as? WorkspaceIntent)?.let(viewModel::onIntent)
+                }
                 is WorkspaceEffect.InstallApk -> {
                     pendingRun = OutputActions.packageOf(context, effect.apk)?.let { it to System.currentTimeMillis() }
                     if (!OutputActions.install(context, effect.apk)) {
@@ -294,6 +310,7 @@ fun WorkspaceScreen(
                     controller.moveLines(up = e.key == Key.DirectionUp); return@onPreviewKeyEvent true
                 }
                 if (e.key == Key.F5) { onIntent(WorkspaceIntent.Build); return@onPreviewKeyEvent true }
+                if (e.key == Key.F2 || (e.isShiftPressed && e.key == Key.F6)) { onIntent(WorkspaceIntent.StartRenameSymbol); return@onPreviewKeyEvent true }
                 if (!e.isCtrlPressed) return@onPreviewKeyEvent false
                 when (e.key) {
                     Key.L -> if (e.isAltPressed) { onIntent(WorkspaceIntent.FormatDocument); true } else false
@@ -365,6 +382,10 @@ fun WorkspaceScreen(
                 onUndoRedo = { u, r -> canUndo = u; canRedo = r },
                 onOpenPalette = { onIntent(WorkspaceIntent.SetPalette(true)) },
                 modifier = modifier,
+                onSelectionAction = { action ->
+                    aiViewModel.selectionAction(action)
+                    onIntent(WorkspaceIntent.ShowDock(DockTab.Ai))
+                },
             )
         }
         val dockContent: @Composable (DockTab, Modifier) -> Unit = { tab, modifier ->
@@ -555,6 +576,7 @@ fun WorkspaceScreen(
         }
     }
     state.history?.let { LocalHistoryDialog(it, onIntent) }
+    state.rename?.let { RenameSymbolDialog(it, onIntent) }
     if (goToLineOpen) {
         GoToLineDialog(state.cursor.line + 1, onDismiss = { goToLineOpen = false }) { line, column ->
             goToLineOpen = false
@@ -574,6 +596,28 @@ fun WorkspaceScreen(
             onIntent = onIntent,
             onDismiss = { signingOpen = false },
         )
+    }
+}
+
+/** Floating bar of AI actions for the selected code. */
+@Composable
+private fun SelectionActionBar(onAction: (AiAssistantViewModel.SelectionAction) -> Unit) {
+    Row(
+        Modifier
+            .shadow(6.dp, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(CodeinTheme.colors.tier3)
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(CodeinIcons.Sparkle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 4.dp).size(16.dp))
+        AiAssistantViewModel.SelectionAction.entries.forEach { action ->
+            TextButton(onClick = { onAction(action) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(32.dp)) {
+                Text(action.label, style = MaterialTheme.typography.labelLarge)
+            }
+        }
     }
 }
 
@@ -667,6 +711,7 @@ private fun EditorArea(
     onUndoRedo: (Boolean, Boolean) -> Unit,
     onOpenPalette: () -> Unit,
     modifier: Modifier,
+    onSelectionAction: (AiAssistantViewModel.SelectionAction) -> Unit = {},
 ) {
     val scheme = CodeinTheme.editorScheme
     // 0 = code only, 1 = code beside the wireframe, 2 = wireframe only.
@@ -718,6 +763,15 @@ private fun EditorArea(
                     },
                 )
                 FindReplaceBar(state.find, { onIntent(WorkspaceIntent.Find(it)) }, Modifier.align(Alignment.TopEnd))
+                // A selection of a few characters or more offers AI actions above the editor.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = state.cursor.hasSelection && state.cursor.selectedText.isNotBlank() && !state.find.visible,
+                    enter = fadeIn() + slideInVertically { -it },
+                    exit = fadeOut() + slideOutVertically { -it },
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = Spacing.sm),
+                ) {
+                    SelectionActionBar(onSelectionAction)
+                }
                 if (isLayoutFile(active.relativePath)) {
                     when (layoutMode) {
                         1 -> LayoutPreview(
@@ -996,6 +1050,7 @@ private fun rememberPaletteItems(
             state.activeFile?.let { f ->
                 add(PaletteItem("a:history", "Local history of ${f.name}", "Earlier versions Codein kept", PaletteCategory.Action, CodeinIcons.History) { onIntent(WorkspaceIntent.ShowHistory(f.relativePath)) })
             }
+            add(PaletteItem("a:rename", "Rename symbol…", "Rename the name at the cursor in every file", PaletteCategory.Action, CodeinIcons.Type, shortcut = "F2") { onIntent(WorkspaceIntent.StartRenameSymbol) })
             add(PaletteItem("a:format", "Format document", "Re-indent and tidy the open file", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+Alt+L") { onIntent(WorkspaceIntent.FormatDocument) })
             add(PaletteItem("a:goto", "Go to line…", "", PaletteCategory.Action, CodeinIcons.Code, shortcut = "Ctrl+G") { onGoToLine() })
             add(PaletteItem("a:keys", "Keyboard shortcuts", "For a physical keyboard", PaletteCategory.Action, CodeinIcons.Type) { onShortcuts() })

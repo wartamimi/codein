@@ -86,7 +86,7 @@ fun stageLabel(step: BuildStep, variant: BuildVariant? = null): String = when (s
     BuildStep.SignAndPackage -> if (variant?.producesBundle == true) "Bundletool" else "Package"
 }
 
-private enum class BuildView { Problems, Log }
+private enum class BuildView { Problems, Log, History }
 
 /**
  * Build tab: a horizontal pipeline stepper (Maven → AAPT2 → ECJ → D8 → Package) with live tabular
@@ -132,8 +132,20 @@ fun BuildConsole(
             items = BuildView.entries.toList(),
             selected = view,
             onSelect = { view = it },
-            icon = { if (it == BuildView.Problems) CodeinIcons.AlertCircle else CodeinIcons.Terminal },
-            label = { if (it == BuildView.Problems) "Problems · $errors/$warnings" else "Build log · ${build.logs.size}" },
+            icon = {
+                when (it) {
+                    BuildView.Problems -> CodeinIcons.AlertCircle
+                    BuildView.Log -> CodeinIcons.Terminal
+                    BuildView.History -> CodeinIcons.History
+                }
+            },
+            label = {
+                when (it) {
+                    BuildView.Problems -> "Problems · $errors/$warnings"
+                    BuildView.Log -> "Log · ${build.logs.size}"
+                    BuildView.History -> "History · ${build.history.size}"
+                }
+            },
             modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
         )
         AnimatedContent(
@@ -142,7 +154,100 @@ fun BuildConsole(
             label = "build-view",
             modifier = Modifier.weight(1f),
         ) { v ->
-            if (v == BuildView.Log) BuildLog(build) else Problems(build.diagnostics, onIntent, onAiFix, onAiExplain)
+            when (v) {
+                BuildView.Log -> BuildLog(build)
+                BuildView.Problems -> Problems(build.diagnostics, onIntent, onAiFix, onAiExplain)
+                BuildView.History -> BuildHistoryView(build.history, build.outputSize)
+            }
+        }
+    }
+}
+
+/** Earlier builds (time, outcome, duration, APK size and its change) and what fills the newest APK. */
+@Composable
+private fun BuildHistoryView(history: List<BuildRecord>, size: ApkSize?) {
+    if (history.isEmpty()) {
+        EmptyState(
+            icon = CodeinIcons.History,
+            title = "No builds yet",
+            message = "Each build is listed here with its time, result and APK size.",
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg),
+        )
+        return
+    }
+    val successes = history.filter { it.outcome == BuildRecord.Outcome.Success && it.outputBytes > 0 }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.xs)) {
+        if (size != null) {
+            item(key = "size") { ApkSizeCard(size) }
+        }
+        items(history, key = { it.time }) { record ->
+            val color = when (record.outcome) {
+                BuildRecord.Outcome.Success -> CodeinTheme.colors.success
+                BuildRecord.Outcome.Failure -> MaterialTheme.colorScheme.error
+                BuildRecord.Outcome.Cancelled -> CodeinTheme.colors.textMuted
+            }
+            // Growth against the previous successful build of the same variant.
+            val previous = successes.firstOrNull { it.time < record.time && it.variant == record.variant }
+            val delta = if (record.outputBytes > 0 && previous != null) record.outputBytes - previous.outputBytes else null
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+                Spacer(Modifier.width(Spacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text(record.summary.ifBlank { record.outcome.name }, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        android.text.format.DateUtils.getRelativeTimeSpanString(record.time).toString() + " · " + record.variant +
+                            (if (record.errors > 0) " · ${record.errors} error(s)" else "") + (if (record.warnings > 0) " · ${record.warnings} warning(s)" else ""),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CodeinTheme.colors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(formatDuration(record.durationMillis), style = metricsTextStyle(CodeinTheme.editorPreferences.codingFont, 11f), color = MaterialTheme.colorScheme.onSurface)
+                    if (record.outputBytes > 0) {
+                        Text(
+                            ApkSizeAnalyzer.human(record.outputBytes) + (delta?.takeIf { it != 0L }?.let { d -> (if (d > 0) " +" else " −") + ApkSizeAnalyzer.human(kotlin.math.abs(d)) } ?: ""),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when {
+                                delta != null && delta > 50_000 -> CodeinTheme.colors.warning
+                                else -> CodeinTheme.colors.textMuted
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApkSizeCard(size: ApkSize) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = Spacing.xs).clip(RoundedCornerShape(12.dp)).background(CodeinTheme.colors.tier2).padding(Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Newest APK · ${ApkSizeAnalyzer.human(size.totalBytes)}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        }
+        val max = size.categories.maxOfOrNull { it.bytes }?.coerceAtLeast(1) ?: 1
+        size.categories.forEach { c ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(c.name, style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(150.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.weight(1f).height(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))) {
+                    Box(Modifier.fillMaxWidth(c.bytes.toFloat() / max).height(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                }
+                Text(ApkSizeAnalyzer.human(c.bytes), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted, modifier = Modifier.width(64.dp).padding(start = Spacing.sm))
+            }
+        }
+        if (size.largest.isNotEmpty()) {
+            Text("Largest files", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = Spacing.xs))
+            size.largest.take(5).forEach { e ->
+                Row {
+                    Text(e.path, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(ApkSizeAnalyzer.human(e.bytes), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
+                }
+            }
         }
     }
 }
