@@ -25,8 +25,20 @@ import javax.inject.Inject
 /** State of the "Template from AI" flow. */
 sealed interface AiTemplateState {
     data object Idle : AiTemplateState
-    data class Generating(val receivedChars: Int, val providerLabel: String) : AiTemplateState
-    data class Ready(val project: GeneratedProject) : AiTemplateState
+    data class Generating(
+        val receivedChars: Int,
+        val providerLabel: String,
+        /** The file the model is writing now, from the last `<<<FILE path>>>` header. */
+        val currentFile: String? = null,
+        val finishedFiles: Int = 0,
+        val part: Int = 1,
+    ) : AiTemplateState
+    data class Ready(
+        val project: GeneratedProject,
+        /** Path of a file being rewritten on its own ("Regenerate this file"), if any. */
+        val regenerating: String? = null,
+        val regenerateError: String? = null,
+    ) : AiTemplateState
     data class Failed(val message: String) : AiTemplateState
     data object Creating : AiTemplateState
 }
@@ -102,7 +114,7 @@ class AiTemplateViewModel @Inject constructor(
                     when (event) {
                         is StreamEvent.TextDelta -> {
                             text.append(event.text)
-                            _state.value = AiTemplateState.Generating(text.length, config.label)
+                            _state.value = progressOf(text, config.label, round + 1)
                         }
                         is StreamEvent.Failed -> failure = event.message
                         is StreamEvent.Completed -> truncated = event.stopReason in TruncatedStopReasons
@@ -127,6 +139,57 @@ class AiTemplateViewModel @Inject constructor(
                     "The AI did not return any usable files." + (parsed.rejected.takeIf { it.isNotEmpty() }?.joinToString("\n", "\n") ?: ""),
                 )
                 else -> AiTemplateState.Ready(parsed)
+            }
+        }
+    }
+
+    private fun progressOf(text: CharSequence, label: String, part: Int): AiTemplateState.Generating {
+        val header = text.lastIndexOf("<<<FILE ")
+        val current = if (header < 0) null else text.substring(header + 8, text.indexOf(">>>", header).takeIf { it > 0 } ?: text.length).trim()
+        val finished = Regex("<<<END>>>").findAll(text).count()
+        return AiTemplateState.Generating(text.length, label, current?.removePrefix("app/src/main/"), finished, part)
+    }
+
+    /**
+     * Rewrites one generated file on its own, with an optional instruction ("make the button
+     * bigger"), keeping every other file as it is.
+     */
+    fun regenerateFile(spec: ProjectSpec, description: String, path: String, instruction: String) {
+        val ready = _state.value as? AiTemplateState.Ready ?: return
+        if (ready.regenerating != null) return
+        _state.value = ready.copy(regenerating = path, regenerateError = null)
+        job = viewModelScope.launch {
+            val config = aiSettings.activeConfig().let { it.copy(maxOutputTokens = maxOf(it.maxOutputTokens, ProjectOutputTokens)) }
+            val system = AiProjectFormat.systemPrompt(
+                appName = spec.name,
+                packageName = spec.packageName,
+                language = spec.effectiveLanguage.displayName,
+                compose = spec.template == ProjectTemplate.ComposeMaterial3,
+                minSdk = spec.minSdk,
+                baseFiles = ready.project.files,
+                dependencies = ready.project.dependencies,
+            )
+            val ask = buildString {
+                append("The app: ").append(description.trim()).append("\n\n")
+                append("The files above are the current project. Rewrite only ").append(path)
+                if (instruction.isNotBlank()) append(", with this change: ").append(instruction.trim())
+                append(". Keep it consistent with the other files. Answer with exactly one <<<FILE ").append(path).append(">>> block.")
+            }
+            val text = StringBuilder()
+            var failure: String? = null
+            llm.stream(config, system, listOf(ChatTurn(ChatRole.User, ask))).collect { event ->
+                when (event) {
+                    is StreamEvent.TextDelta -> text.append(event.text)
+                    is StreamEvent.Failed -> failure = event.message
+                    is StreamEvent.Completed -> if (event.stopReason in TruncatedStopReasons) failure = "The file was cut off at the output limit."
+                }
+            }
+            val content = AiProjectFormat.parse(text.toString()).files[path]
+            val current = _state.value as? AiTemplateState.Ready ?: return@launch
+            _state.value = when {
+                failure != null -> current.copy(regenerating = null, regenerateError = failure)
+                content == null -> current.copy(regenerating = null, regenerateError = "The AI did not return $path.")
+                else -> current.copy(project = current.project.copy(files = current.project.files + (path to content)), regenerating = null)
             }
         }
     }

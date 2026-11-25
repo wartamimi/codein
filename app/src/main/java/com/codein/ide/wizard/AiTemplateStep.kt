@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,6 +40,8 @@ import com.codein.ide.core.ui.components.PillChip
 import com.codein.ide.core.ui.icons.CodeinIcons
 import com.codein.ide.core.ui.theme.CodeinTheme
 import com.codein.ide.core.ui.theme.Spacing
+import com.codein.ide.preview.LayoutPreview
+import com.codein.ide.preview.isLayoutFile
 
 private val Examples = listOf(
     "A tip calculator with bill amount, tip percentage slider and split between people.",
@@ -80,6 +83,7 @@ internal fun AiTemplateStep(
     onDescriptionChange: (String) -> Unit,
     state: AiTemplateState,
     summary: String,
+    onRegenerateFile: (path: String, instruction: String) -> Unit = { _, _ -> },
 ) {
     Text("Describe your app", style = MaterialTheme.typography.titleMedium)
     Text(summary, style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
@@ -105,25 +109,41 @@ internal fun AiTemplateStep(
             color = CodeinTheme.colors.textMuted,
         )
         is AiTemplateState.Generating -> CodeinCard(Modifier.fillMaxWidth()) {
-            Text("Generating with ${state.providerLabel}…", style = MaterialTheme.typography.labelLarge)
+            Text("Generating with ${state.providerLabel}…" + if (state.part > 1) " (part ${state.part})" else "", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.size(Spacing.sm))
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Spacer(Modifier.size(Spacing.xs))
-            Text("${state.receivedChars} characters received", style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+            Text(
+                state.currentFile?.let { "Writing $it" } ?: "Planning the app",
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "${state.finishedFiles} block(s) done · ${state.receivedChars} characters",
+                style = MaterialTheme.typography.bodySmall,
+                color = CodeinTheme.colors.textMuted,
+            )
         }
         is AiTemplateState.Failed -> CodeinCard(Modifier.fillMaxWidth()) {
             Text("Could not generate the project", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
             Text(state.message, style = MaterialTheme.typography.bodySmall)
         }
         AiTemplateState.Creating -> LinearProgressIndicator(Modifier.fillMaxWidth())
-        is AiTemplateState.Ready -> GeneratedFiles(state)
+        is AiTemplateState.Ready -> GeneratedFiles(state, onRegenerateFile)
     }
 }
 
 @Composable
-private fun GeneratedFiles(state: AiTemplateState.Ready) {
+private fun GeneratedFiles(state: AiTemplateState.Ready, onRegenerateFile: (String, String) -> Unit) {
     val project = state.project
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    var showPreview by rememberSaveable { mutableStateOf(true) }
+    var instruction by rememberSaveable { mutableStateOf("") }
+    state.regenerateError?.let {
+        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
     CodeinCard(Modifier.fillMaxWidth()) {
         Text("Review before creating", style = MaterialTheme.typography.labelLarge)
         if (project.summary.isNotBlank()) Text(project.summary, style = MaterialTheme.typography.bodyMedium)
@@ -142,14 +162,43 @@ private fun GeneratedFiles(state: AiTemplateState.Ready) {
                 Text(path.removePrefix("app/src/main/"), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Text("${content.lines().size} lines", style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
             }
+            if (state.regenerating == path) {
+                Spacer(Modifier.size(Spacing.xs))
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
             if (open) {
                 Spacer(Modifier.size(Spacing.sm))
-                Box(
+                if (isLayoutFile(path)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PillChip("Preview", selected = showPreview, onClick = { showPreview = true })
+                        PillChip("XML", selected = !showPreview, onClick = { showPreview = false })
+                    }
+                    Spacer(Modifier.size(Spacing.xs))
+                }
+                if (isLayoutFile(path) && showPreview) {
+                    LayoutPreview(content, projectDir = null, modifier = Modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(8.dp)))
+                } else Box(
                     Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(8.dp)).background(CodeinTheme.colors.base)
                         .verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(Spacing.sm),
                 ) {
                     Text(content, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)
                 }
+                Spacer(Modifier.size(Spacing.sm))
+                OutlinedTextField(
+                    value = instruction,
+                    onValueChange = { instruction = it },
+                    label = { Text("Change for this file (optional)") },
+                    singleLine = true,
+                    enabled = state.regenerating == null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.size(Spacing.xs))
+                PillChip(
+                    if (state.regenerating == path) "Regenerating…" else "Regenerate this file",
+                    icon = CodeinIcons.Sparkle,
+                    selected = true,
+                    onClick = { if (state.regenerating == null) { onRegenerateFile(path, instruction); instruction = "" } },
+                )
             }
         }
     }

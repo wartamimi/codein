@@ -177,6 +177,7 @@ fun NewProjectWizard(
                                 onDescriptionChange = { aiDescription = it },
                                 state = aiState,
                                 summary = "${if (aiCompose) "Compose" else "Views"} · ${effectiveLanguage.displayName} · $name ($packageName)",
+                                onRegenerateFile = { path, instruction -> aiViewModel.regenerateFile(aiSpec, aiDescription, path, instruction) },
                             )
                         } else {
                             Text("SDK levels", style = MaterialTheme.typography.titleMedium)
