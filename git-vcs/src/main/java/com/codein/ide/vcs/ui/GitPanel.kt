@@ -1,5 +1,6 @@
 package com.codein.ide.vcs.ui
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Surface
@@ -25,7 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -311,7 +311,7 @@ fun DiffView(diff: String) {
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 10.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(CodeinShape.Surface)
             .background(CodeinTheme.editorScheme.background)
             .horizontalScroll(rememberScrollState())
             .padding(vertical = 6.dp),
@@ -390,7 +390,7 @@ private fun CredentialsDialog(
                         style = codeTextStyle(CodeinTheme.editorPreferences.codingFont, 10.5f, false),
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(8.dp),
+                        modifier = Modifier.clip(CodeinShape.Surface).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(8.dp),
                     )
                     Text(tr("Add this public key to GitHub (Settings > SSH and GPG keys) or your Git host."), style = MaterialTheme.typography.labelSmall, color = CodeinTheme.colors.textMuted)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -1,5 +1,6 @@
 package com.codein.ide.home
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -90,7 +90,7 @@ fun FirstRunTour(onFinish: () -> Unit) {
                 .padding(16.dp)
                 .widthIn(max = 480.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
+                .clip(CodeinShape.Surface)
                 .background(CodeinTheme.colors.tier1)
                 .padding(24.dp),
         ) {
@@ -98,7 +98,7 @@ fun FirstRunTour(onFinish: () -> Unit) {
                 val p = TourPages[index]
                 Column {
                     Box(
-                        Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                        Modifier.size(56.dp).clip(CodeinShape.Surface).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(p.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))

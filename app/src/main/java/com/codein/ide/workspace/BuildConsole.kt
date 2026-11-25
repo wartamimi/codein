@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -30,7 +31,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -225,7 +225,7 @@ private fun BuildHistoryView(history: List<BuildRecord>, size: ApkSize?) {
 @Composable
 private fun ApkSizeCard(size: ApkSize) {
     Column(
-        Modifier.fillMaxWidth().padding(vertical = Spacing.xs).clip(RoundedCornerShape(12.dp)).background(CodeinTheme.colors.tier2).padding(Spacing.md),
+        Modifier.fillMaxWidth().padding(vertical = Spacing.xs).clip(CodeinShape.Surface).background(CodeinTheme.colors.tier2).padding(Spacing.md),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -320,9 +320,9 @@ private fun Banner(icon: ImageVector, color: Color, text: String, action: String
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.md, vertical = Spacing.xs)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(CodeinShape.Surface)
             .background(color.copy(alpha = 0.10f))
-            .border(1.dp, color.copy(alpha = 0.30f), RoundedCornerShape(12.dp))
+            .border(1.dp, color.copy(alpha = 0.30f), CodeinShape.Surface)
             .heightIn(min = Sizes.MinTouch)
             .padding(start = Spacing.md, end = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -405,7 +405,7 @@ private fun DiagnosticCard(d: CompilerDiagnostic, onOpen: () -> Unit, onFix: () 
         Severity.Info -> CodeinTheme.colors.info
     }
     val font = CodeinTheme.editorPreferences.codingFont
-    val shape = RoundedCornerShape(12.dp)
+    val shape = CodeinShape.Surface
     var expanded by remember { mutableStateOf(false) }
     Column(
         Modifier
@@ -427,7 +427,7 @@ private fun DiagnosticCard(d: CompilerDiagnostic, onOpen: () -> Unit, onFix: () 
                 if (d.line != null) {
                     Spacer(Modifier.width(Spacing.sm))
                     Box(
-                        Modifier.clip(RoundedCornerShape(6.dp)).background(CodeinTheme.colors.tier3).padding(horizontal = Spacing.xs + 2.dp, vertical = 2.dp),
+                        Modifier.clip(CodeinShape.Control).background(CodeinTheme.colors.tier3).padding(horizontal = Spacing.xs + 2.dp, vertical = 2.dp),
                     ) {
                         Text("${d.line}:${d.column ?: 1}", style = metricsTextStyle(font, 11f), color = MaterialTheme.colorScheme.onSurface)
                     }
@@ -462,7 +462,7 @@ private fun DiagnosticCard(d: CompilerDiagnostic, onOpen: () -> Unit, onFix: () 
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = Spacing.md, end = Spacing.md, bottom = Spacing.md)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(CodeinShape.Surface)
                     .background(CodeinTheme.colors.base)
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = Spacing.sm, vertical = Spacing.xs),

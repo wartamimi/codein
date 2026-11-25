@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
@@ -35,7 +36,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -179,9 +179,9 @@ private fun BuildTargetChip(variant: BuildVariant, compact: Boolean, onSelect: (
         Row(
             Modifier
                 .height(Sizes.Pill)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(CodeinShape.Control)
                 .background(CodeinTheme.colors.tier2)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeinShape.Control)
                 .clickable(onClickLabel = "Build target") { open = true }
                 .padding(start = Spacing.sm, end = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,

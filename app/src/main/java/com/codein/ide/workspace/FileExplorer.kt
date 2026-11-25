@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -11,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -125,7 +125,7 @@ fun FileExplorer(
                             .fillMaxWidth()
                             .height(Sizes.TreeRow)
                             .padding(horizontal = Spacing.xs)
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(CodeinShape.Surface)
                             .background(if (active) activeBg else Color.Transparent)
                             .combinedClickable(
                                 onClickLabel = if (row.isDirectory) (if (row.expanded) "Collapse" else "Expand") else "Open",
@@ -178,7 +178,7 @@ fun FileExplorer(
                         )
                         if (status != null && !row.isDirectory) {
                             Box(
-                                Modifier.size(Sizes.IconSm).clip(RoundedCornerShape(4.dp)).background(status.color.copy(alpha = 0.14f)),
+                                Modifier.size(Sizes.IconSm).clip(CodeinShape.Surface).background(status.color.copy(alpha = 0.14f)),
                                 contentAlignment = Alignment.Center,
                             ) { GitStatusBadge(status) }
                         } else if (status != null) {

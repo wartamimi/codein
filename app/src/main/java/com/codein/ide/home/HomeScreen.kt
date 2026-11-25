@@ -1,5 +1,6 @@
 package com.codein.ide.home
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.prefs.UiPrefs
 import com.codein.ide.core.ui.i18n.tr
 import android.text.format.DateUtils
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -99,7 +99,7 @@ fun HomeScreen(
             item {
                 Row(Modifier.widthIn(max = 720.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                        Modifier.size(44.dp).clip(CodeinShape.Surface)
                             .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary))),
                         contentAlignment = Alignment.Center,
                     ) { Icon(CodeinIcons.BrandMark, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp)) }

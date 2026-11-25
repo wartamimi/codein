@@ -1,5 +1,6 @@
 package com.codein.ide.ai.ui
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,7 +37,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Icon
@@ -175,9 +175,9 @@ private fun Composer(state: AiAssistantState, onIntent: (AiIntent) -> Unit) {
             Modifier
                 .weight(1f)
                 .heightIn(min = 44.dp, max = 160.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(CodeinShape.Surface)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeinShape.Surface)
                 .padding(horizontal = 12.dp, vertical = 11.dp),
         ) {
             if (state.input.isEmpty()) {
@@ -223,7 +223,7 @@ private fun UserBubble(message: AiMessage) {
         Box(
             Modifier
                 .widthIn(max = 520.dp)
-                .clip(RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp))
+                .clip(CodeinShape.Surface)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
                 .padding(horizontal = 12.dp, vertical = 9.dp),
         ) {
@@ -279,7 +279,7 @@ private fun AssistantMessage(message: AiMessage, onApplyDiff: (FilePatch) -> Uni
         }
         message.error?.let { error ->
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)).padding(10.dp),
+                Modifier.fillMaxWidth().clip(CodeinShape.Surface).background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)).padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(CodeinIcons.AlertCircle, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
@@ -345,9 +345,9 @@ private fun CodeCard(block: MdBlock.Code, onInsertCode: (String) -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(CodeinShape.Surface)
             .background(scheme.background)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeinShape.Surface),
     ) {
         Row(Modifier.fillMaxWidth().background(scheme.gutterBackground).padding(start = 10.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(CodeinIcons.Code, null, tint = CodeinTheme.colors.textMuted, modifier = Modifier.size(14.dp))
@@ -377,7 +377,7 @@ private fun DiffCard(block: MdBlock.Diff, onApplyDiff: (FilePatch) -> Unit) {
     val style = codeTextStyle(prefs.codingFont, 12f, false)
     if (block.patches.isEmpty()) {
         // Still streaming (or unparseable): show the raw text so nothing is hidden.
-        Text(block.raw, style = style, color = scheme.foreground, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(scheme.background).padding(10.dp))
+        Text(block.raw, style = style, color = scheme.foreground, modifier = Modifier.fillMaxWidth().clip(CodeinShape.Surface).background(scheme.background).padding(10.dp))
         return
     }
     block.patches.forEach { patch ->
@@ -387,9 +387,9 @@ private fun DiffCard(block: MdBlock.Diff, onApplyDiff: (FilePatch) -> Unit) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(CodeinShape.Surface)
                 .background(scheme.background)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeinShape.Surface),
         ) {
             Row(Modifier.fillMaxWidth().background(scheme.gutterBackground).padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 val name = patch.targetPath?.substringAfterLast('/') ?: "current file"

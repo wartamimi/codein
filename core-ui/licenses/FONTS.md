@@ -6,4 +6,4 @@ All bundled fonts are variable TrueType fonts from the google/fonts repository, 
 - Fira Code (Nikita Prokopov)
 - Cascadia Code (Microsoft Corporation)
 - Source Code Pro (Adobe)
-- Plus Jakarta Sans (Tokotype)
+- Host Grotesk (The Host Grotesk Project Authors, Element Type)

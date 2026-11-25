@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -85,7 +85,7 @@ fun SigningSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = CodeinTheme.colors.tier1,
         dragHandle = { DragHandle(Modifier.padding(vertical = Spacing.md)) },
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        shape = CodeinShape.Surface,
     ) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.88f).navigationBarsPadding()) {
             Text(tr("Signing & release"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = Spacing.lg))
@@ -204,7 +204,7 @@ private fun ExportTab(
 /** The prominent "Export Signed .AAB" action card. */
 @Composable
 private fun ExportAabCard(enabled: Boolean, running: Boolean, build: BuildUiState, onExport: () -> Unit, onCancel: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = CodeinShape.Surface
     val accent = MaterialTheme.colorScheme.primary
     Column(
         Modifier
@@ -218,7 +218,7 @@ private fun ExportAabCard(enabled: Boolean, running: Boolean, build: BuildUiStat
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(accent.copy(alpha = 0.2f)),
+                Modifier.size(40.dp).clip(CodeinShape.Surface).background(accent.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center,
             ) { Icon(CodeinIcons.Export, null, tint = accent, modifier = Modifier.size(Sizes.IconLg)) }
             Spacer(Modifier.width(Spacing.md))

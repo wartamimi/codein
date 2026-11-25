@@ -1,5 +1,6 @@
 package com.codein.ide.wizard
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -257,7 +257,7 @@ private fun TemplateCard(template: ProjectTemplate, selected: Boolean, modifier:
             Modifier
                 .fillMaxWidth()
                 .height(112.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(CodeinShape.Surface)
                 .background(CodeinTheme.colors.base),
             contentAlignment = Alignment.Center,
         ) {
@@ -266,17 +266,17 @@ private fun TemplateCard(template: ProjectTemplate, selected: Boolean, modifier:
                 Modifier
                     .width(56.dp)
                     .height(96.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(CodeinShape.Surface)
                     .background(CodeinTheme.colors.tier2)
                     .padding(Spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
-                Box(Modifier.fillMaxWidth().height(Spacing.sm).clip(RoundedCornerShape(2.dp)).background(accent.copy(alpha = 0.7f)))
+                Box(Modifier.fillMaxWidth().height(Spacing.sm).clip(CodeinShape.Surface).background(accent.copy(alpha = 0.7f)))
                 when (template) {
                     ProjectTemplate.ComposeMaterial3 -> {
-                        repeat(3) { Box(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(4.dp)).background(CodeinTheme.colors.tier3)) }
+                        repeat(3) { Box(Modifier.fillMaxWidth().height(14.dp).clip(CodeinShape.Surface).background(CodeinTheme.colors.tier3)) }
                         Spacer(Modifier.weight(1f))
-                        Box(Modifier.align(Alignment.End).size(14.dp).clip(RoundedCornerShape(4.dp)).background(accent))
+                        Box(Modifier.align(Alignment.End).size(14.dp).clip(CodeinShape.Surface).background(accent))
                     }
                     ProjectTemplate.EmptyViewsActivity -> {
                         Spacer(Modifier.weight(1f))
@@ -284,7 +284,7 @@ private fun TemplateCard(template: ProjectTemplate, selected: Boolean, modifier:
                         Spacer(Modifier.weight(1f))
                     }
                     ProjectTemplate.BottomNavigation -> {
-                        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(4.dp)).background(CodeinTheme.colors.tier3))
+                        Box(Modifier.fillMaxWidth().weight(1f).clip(CodeinShape.Surface).background(CodeinTheme.colors.tier3))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             repeat(3) { i -> Box(Modifier.size(Spacing.sm).clip(CircleShape).background(if (i == 0) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))) }
                         }

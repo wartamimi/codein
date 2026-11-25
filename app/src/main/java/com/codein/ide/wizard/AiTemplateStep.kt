@@ -1,5 +1,6 @@
 package com.codein.ide.wizard
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -57,7 +57,7 @@ internal fun AiTemplateCard(selected: Boolean, onClick: () -> Unit) {
     CodeinCard(Modifier.fillMaxWidth(), selected = selected, onClick = onClick, contentPadding = PaddingValues(Spacing.md)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                Modifier.size(40.dp).clip(CodeinShape.Surface).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(CodeinIcons.Sparkle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -176,9 +176,9 @@ private fun GeneratedFiles(state: AiTemplateState.Ready, onRegenerateFile: (Stri
                     Spacer(Modifier.size(Spacing.xs))
                 }
                 if (isLayoutFile(path) && showPreview) {
-                    LayoutPreview(content, projectDir = null, modifier = Modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(8.dp)))
+                    LayoutPreview(content, projectDir = null, modifier = Modifier.fillMaxWidth().height(420.dp).clip(CodeinShape.Surface))
                 } else Box(
-                    Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(8.dp)).background(CodeinTheme.colors.base)
+                    Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(CodeinShape.Surface).background(CodeinTheme.colors.base)
                         .verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(Spacing.sm),
                 ) {
                     Text(content, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)

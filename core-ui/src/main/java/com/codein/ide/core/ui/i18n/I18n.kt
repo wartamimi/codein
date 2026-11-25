@@ -112,7 +112,7 @@ object I18n {
         "Find in file" to "Cari di file",
         "Fix with AI" to "Perbaiki dengan AI",
         "Font, size, line height, theme" to "Font, ukuran, tinggi baris, tema",
-        "Fonts: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro and Plus Jakarta Sans are bundled under the SIL Open Font License 1.1." to "Font: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, dan Plus Jakarta Sans disertakan dengan lisensi SIL Open Font License 1.1.",
+        "Fonts: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro and Host Grotesk are bundled under the SIL Open Font License 1.1." to "Font: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, dan Host Grotesk disertakan dengan lisensi SIL Open Font License 1.1.",
         "For a physical keyboard" to "Untuk keyboard fisik",
         "Forget hosts" to "Lupakan host",
         "Format document" to "Rapikan kode",

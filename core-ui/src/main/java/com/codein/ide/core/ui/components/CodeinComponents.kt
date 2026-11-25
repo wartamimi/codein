@@ -1,5 +1,6 @@
 package com.codein.ide.core.ui.components
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -39,7 +40,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -171,7 +171,7 @@ fun StudioSectionCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
                 Box(
-                    Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(accent.copy(alpha = 0.14f)),
+                    Modifier.size(28.dp).clip(CodeinShape.Surface).background(accent.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center,
                 ) { Icon(icon, null, tint = accent, modifier = Modifier.size(Sizes.IconSm)) }
                 Spacer(Modifier.width(Spacing.sm))
@@ -258,7 +258,7 @@ fun ToolbarIconButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(bg), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(size).clip(CodeinShape.Surface).background(bg), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = tr(contentDescription), tint = if (enabled) tint else tint.copy(alpha = 0.35f), modifier = Modifier.size(iconSize))
         }
     }
@@ -407,7 +407,7 @@ fun <T> SegmentedTabs(
     showLabels: Boolean = true,
 ) {
     val haptic = LocalHapticFeedback.current
-    val shape = RoundedCornerShape(10.dp)
+    val shape = CodeinShape.Control
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
@@ -426,7 +426,7 @@ fun <T> SegmentedTabs(
                 .offset(x = offset)
                 .width(segment)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(CodeinShape.Control)
                 .background(CodeinTheme.colors.tier3),
         )
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
@@ -441,7 +441,7 @@ fun <T> SegmentedTabs(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(CodeinShape.Control)
                         .clickable {
                             if (!isSelected) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onSelect(item)
@@ -484,7 +484,7 @@ fun CompactTextField(
     onSubmit: (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = CodeinShape.Surface
     val border by animateColorAsState(
         if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant,
         Motion.switch(),
@@ -596,7 +596,7 @@ fun PanelHeader(
 fun CountBadge(text: String, color: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(CodeinShape.Control)
             .background(color.copy(alpha = 0.16f))
             .padding(horizontal = Spacing.xs + 2.dp, vertical = 2.dp),
     ) {
@@ -615,9 +615,9 @@ fun EmptyState(icon: ImageVector, title: String, message: String, modifier: Modi
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(CodeinShape.Surface)
                 .background(CodeinTheme.colors.tier2)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeinShape.Surface),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))

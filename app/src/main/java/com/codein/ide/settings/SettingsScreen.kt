@@ -1,5 +1,6 @@
 package com.codein.ide.settings
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.I18n
 import com.codein.ide.core.ui.prefs.UiPrefs
 import com.codein.ide.core.ui.components.StudioSectionCard
@@ -14,7 +15,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -271,7 +271,7 @@ fun SettingsScreen(
                                 Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 8.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(CodeinShape.Surface)
                                     .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else androidx.compose.ui.graphics.Color.Transparent)
                                     .clickable(onClickLabel = tr(t.title)) { tab = t }
                                     .semantics { this.selected = selected }
@@ -459,7 +459,7 @@ private fun EditorSection(viewModel: SettingsViewModel) {
             Spacer(Modifier.size(8.dp))
             Button(onClick = { open = true }) { Text(tr("Customize editor")) }
         }
-        Text(tr("Fonts: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro and Plus Jakarta Sans are bundled under the SIL Open Font License 1.1."), style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
+        Text(tr("Fonts: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro and Host Grotesk are bundled under the SIL Open Font License 1.1."), style = MaterialTheme.typography.bodySmall, color = CodeinTheme.colors.textMuted)
     }
     if (open) EditorPreferencesSheet(prefs, onChange = { viewModel.onPreference(it) }, onDismiss = { open = false })
 }

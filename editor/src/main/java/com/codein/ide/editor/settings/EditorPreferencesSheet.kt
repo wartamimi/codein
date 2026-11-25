@@ -1,5 +1,6 @@
 package com.codein.ide.editor.settings
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -96,7 +96,7 @@ fun EditorPreferencesSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = CodeinTheme.colors.tier1,
         dragHandle = { DragHandle(Modifier.padding(vertical = Spacing.md)) },
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        shape = CodeinShape.Surface,
     ) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
@@ -223,7 +223,7 @@ private fun ToggleRow(label: String, supporting: String?, checked: Boolean, enab
 @Composable
 private fun FontChoice(font: CodingFont, selected: Boolean, onClick: () -> Unit) {
     val border by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, Motion.switch(), label = "font-border")
-    val shape = RoundedCornerShape(12.dp)
+    val shape = CodeinShape.Surface
     Column(
         Modifier
             .clip(shape)
@@ -241,7 +241,7 @@ private fun FontChoice(font: CodingFont, selected: Boolean, onClick: () -> Unit)
 @Composable
 private fun SchemeCard(scheme: EditorColorScheme, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val border by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, Motion.switch(), label = "scheme-border")
-    val shape = RoundedCornerShape(12.dp)
+    val shape = CodeinShape.Surface
     val chrome = scheme.chrome
     Column(
         modifier
@@ -296,7 +296,7 @@ private fun PreviewCard(prefs: EditorPreferences, modifier: Modifier = Modifier)
         span("$tab// => ligatures, 0123456789\n", s.comment)
         span("}", s.foreground)
     }
-    val shape = RoundedCornerShape(12.dp)
+    val shape = CodeinShape.Surface
     Row(
         modifier
             .fillMaxWidth()

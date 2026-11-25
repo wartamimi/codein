@@ -1,5 +1,6 @@
 package com.codein.ide.workspace
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.prefs.UiPrefs
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import com.codein.ide.core.ui.i18n.tr
@@ -60,7 +61,6 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -548,7 +548,7 @@ fun WorkspaceScreen(
                     ModalDrawerSheet(
                         modifier = Modifier.width(Sizes.DrawerWidth),
                         drawerContainerColor = CodeinTheme.colors.tier1,
-                        drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
+                        drawerShape = CodeinShape.Surface,
                         windowInsets = WindowInsets(0, 0, 0, 0),
                     ) {
                         sidebar(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) { scope.launch { drawerState.close() } }
@@ -604,7 +604,7 @@ fun WorkspaceScreen(
     state.rename?.let { RenameSymbolDialog(it, onIntent) }
     state.imagePreview?.let { file ->
         androidx.compose.ui.window.Dialog(onDismissRequest = { onIntent(WorkspaceIntent.CloseImagePreview) }) {
-            androidx.compose.material3.Surface(shape = RoundedCornerShape(16.dp)) {
+            androidx.compose.material3.Surface(shape = CodeinShape.Surface) {
                 ImageFilePreview(file, Modifier.fillMaxWidth().heightIn(max = 560.dp))
             }
         }
@@ -636,8 +636,8 @@ fun WorkspaceScreen(
 private fun SelectionActionBar(onAction: (AiAssistantViewModel.SelectionAction) -> Unit) {
     Row(
         Modifier
-            .shadow(6.dp, RoundedCornerShape(20.dp))
-            .clip(RoundedCornerShape(20.dp))
+            .shadow(6.dp, CodeinShape.Surface)
+            .clip(CodeinShape.Surface)
             .background(CodeinTheme.colors.tier3)
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 6.dp, vertical = 4.dp),

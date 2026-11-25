@@ -4,36 +4,41 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Raw brand palette for the Codein Obsidian design system. Depth comes from a calibrated 4-step
- * surface ladder plus 1dp hairlines, never from drop shadows.
+ * Raw brand palette for Codein Black: a pure black ground, near-white type, one grey surface for
+ * inset cards and 1dp #1D1D1D hairlines. The UI is monochrome; hue appears only for status (success,
+ * warning, error, info). Every text token clears WCAG AA and APCA Lc 75 on every surface tier.
  */
 object CodeinPalette {
-    /** Tier 0: editor canvas / app base. */
-    val Base = Color(0xFF0B0D12)
-    /** Tier 1: sidebars, top bar, bottom dock. */
-    val Tier1 = Color(0xFF12151E)
-    /** Tier 2: cards, floating search, modals, active pills. */
-    val Tier2 = Color(0xFF191D29)
-    /** Tier 3: hover / pressed / selected highlight. */
-    val Tier3 = Color(0xFF222738)
-    /** Hairline source color; rendered at 30% alpha as `outlineVariant`. */
-    val HairlineSource = Color(0xFF8A93AB)
+    /** Tier 0: the one page ground, also the editor canvas. */
+    val Base = Color(0xFF000000)
+    /** Tier 1: sidebars, top bar and dock share the ground and are separated by hairlines. */
+    val Tier1 = Color(0xFF000000)
+    /** Tier 2: inset cards, floating search, sheets, dialogs. */
+    val Tier2 = Color(0xFF0B0B0B)
+    /** Tier 3: hover, pressed and selected rows. */
+    val Tier3 = Color(0xFF161616)
+    /** Hairline source; at 30% alpha it renders #1D1D1D on the black ground. */
+    val HairlineSource = Color(0xFF616161)
 
-    val TextPrimary = Color(0xFFE6E8EF)
-    val TextSecondary = Color(0xFFA3A9BA)
-    val TextMuted = Color(0xFF6C7386)
+    val TextPrimary = Color(0xFFF9F8F9)
+    val TextSecondary = Color(0xFFE5E5E4)
+    val TextMuted = Color(0xFFD6D6D5)
 
-    val Accent = Color(0xFF8B7CF6)
-    val AccentOn = Color(0xFF0B0D12)
-    val Teal = Color(0xFF2DD4BF)
-    val Sky = Color(0xFF7DC4FF)
+    /** Primary action fill (pill buttons, switches, progress) and its label. */
+    val Action = Color(0xFFEDEDED)
+    val ActionOn = Color(0xFF040404)
 
-    val Success = Color(0xFF4ADE80)
+    /** Brand blue. Reserved for the info status and search matches, never for decoration. */
+    val Brand = Color(0xFFA3CFFF)
+
+    val Success = Color(0xFF6EE7A0)
     val Warning = Color(0xFFFBBF24)
-    val Error = Color(0xFFF87171)
-    val Info = Color(0xFF60A5FA)
+    val Error = Color(0xFFFF9C94)
+    val Info = Brand
 
     // Legacy aliases kept so older call sites keep compiling against the new tiers.
+    val Accent get() = Action
+    val AccentOn get() = ActionOn
     val Background get() = Base
     val Panel get() = Tier1
     val Card get() = Tier2
@@ -136,45 +141,48 @@ data class EditorColorScheme(
 )
 
 object EditorColorSchemes {
-    /** Default theme: the Codein Obsidian surface ladder with a violet accent. */
+    /**
+     * Default theme: Codein Black. Kept under the original `codein_obsidian` id so saved preferences
+     * move to the new look. Syntax is told apart by tone, not hue, to match the monochrome chrome.
+     */
     val CodeinObsidian = EditorColorScheme(
         id = "codein_obsidian",
-        displayName = "Codein Obsidian",
+        displayName = "Codein Black",
         isDark = true,
-        background = Color(0xFF0B0D12),
-        foreground = Color(0xFFD7DCE8),
-        gutterBackground = Color(0xFF0B0D12),
-        lineNumber = Color(0xFF4A5164),
-        lineNumberActive = Color(0xFFB9B0FF),
-        currentLine = Color(0xFF12151E),
-        selection = Color(0xFF2B2F48),
-        cursor = Color(0xFFB9B0FF),
-        indentGuide = Color(0xFF1C2030),
-        matchHighlight = Color(0x66FBBF24),
-        keyword = Color(0xFFB79CFF),
-        string = Color(0xFF8BE3A8),
-        number = Color(0xFFFFB077),
-        comment = Color(0xFF5F6780),
-        function = Color(0xFF7DC4FF),
-        type = Color(0xFFFFD580),
-        variable = Color(0xFFD7DCE8),
-        constant = Color(0xFFFFB077),
-        operator = Color(0xFF7FDBCA),
-        annotation = Color(0xFFF5A8D4),
-        tag = Color(0xFF7DC4FF),
-        attribute = Color(0xFFFFD580),
-        punctuation = Color(0xFF8D94A8),
-        error = Color(0xFFF87171),
-        warning = Color(0xFFFBBF24),
-        bracketColors = listOf(Color(0xFFFFD580), Color(0xFFB79CFF), Color(0xFF7DC4FF)),
+        background = Color(0xFF000000),
+        foreground = Color(0xFFE5E5E4),
+        gutterBackground = Color(0xFF000000),
+        lineNumber = Color(0xFF7A7A7A),
+        lineNumberActive = Color(0xFFF9F8F9),
+        currentLine = Color(0xFF0B0B0B),
+        selection = Color(0xFF2A2A2A),
+        cursor = Color(0xFFF9F8F9),
+        indentGuide = Color(0xFF1D1D1D),
+        matchHighlight = Color(0x59A3CFFF),
+        keyword = Color(0xFFFFFFFF),
+        string = Color(0xFFB9B9B8),
+        number = Color(0xFFC9C9C8),
+        comment = Color(0xFF8C8C8C),
+        function = Color(0xFFEDEDED),
+        type = Color(0xFFF9F8F9),
+        variable = Color(0xFFD6D6D5),
+        constant = Color(0xFFC9C9C8),
+        operator = Color(0xFFA6A6A5),
+        annotation = Color(0xFFB9B9B8),
+        tag = Color(0xFFF9F8F9),
+        attribute = Color(0xFFB9B9B8),
+        punctuation = Color(0xFF9A9A99),
+        error = CodeinPalette.Error,
+        warning = CodeinPalette.Warning,
+        bracketColors = listOf(Color(0xFFF9F8F9), Color(0xFFC9C9C8), Color(0xFF9A9A99)),
         chrome = ChromePalette(
             base = CodeinPalette.Base,
             tier1 = CodeinPalette.Tier1,
             tier2 = CodeinPalette.Tier2,
             tier3 = CodeinPalette.Tier3,
-            accent = CodeinPalette.Accent,
-            onAccent = CodeinPalette.AccentOn,
-            secondary = CodeinPalette.Teal,
+            accent = CodeinPalette.Action,
+            onAccent = CodeinPalette.ActionOn,
+            secondary = CodeinPalette.TextSecondary,
             textPrimary = CodeinPalette.TextPrimary,
             textSecondary = CodeinPalette.TextSecondary,
             textMuted = CodeinPalette.TextMuted,

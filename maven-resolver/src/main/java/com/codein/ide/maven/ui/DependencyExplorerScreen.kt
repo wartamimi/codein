@@ -1,5 +1,6 @@
 package com.codein.ide.maven.ui
 
+import com.codein.ide.core.ui.theme.CodeinShape
 import com.codein.ide.core.ui.i18n.tr
 import com.codein.ide.core.ui.theme.Spacing
 import com.codein.ide.core.ui.components.CompactTextField
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -176,7 +176,7 @@ private fun SearchHitCard(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(CodeinShape.Surface)
                                     .background(MaterialTheme.colorScheme.surfaceContainer)
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -229,7 +229,7 @@ private fun TreeRow(depth: Int, node: DependencyNode) {
             .padding(start = (12 + depth * 14).dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (depth == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline))
+        Box(Modifier.size(6.dp).clip(CodeinShape.Surface).background(if (depth == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline))
         Spacer(Modifier.width(8.dp))
         Text(
             "${node.coordinate.group}:${node.coordinate.artifact}",
