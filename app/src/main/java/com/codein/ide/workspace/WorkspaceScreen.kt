@@ -84,6 +84,9 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codein.ide.ai.ui.AiAssistantPanel
+import com.codein.ide.editor.sora.CompletionWords
+import com.codein.ide.preview.LayoutPreview
+import com.codein.ide.preview.isLayoutFile
 import com.codein.ide.terminal.TerminalPanel
 import com.codein.ide.terminal.TerminalViewModel
 import com.codein.ide.ai.ui.AiAssistantViewModel
@@ -95,6 +98,7 @@ import com.codein.ide.compiler.model.Severity
 import com.codein.ide.core.ui.components.DragHandle
 import com.codein.ide.core.ui.components.EmptyState
 import com.codein.ide.core.ui.components.HairlineDivider
+import com.codein.ide.core.ui.components.PillChip
 import com.codein.ide.core.ui.components.PulseDot
 import com.codein.ide.core.ui.components.SegmentedTabs
 import com.codein.ide.core.ui.components.ToolbarIconButton
@@ -196,6 +200,12 @@ fun WorkspaceScreen(
     var consoleOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(controller) { viewModel.commands.collect { command -> controller.execute(command) } }
+    // Project-wide completion words: re-indexed when the project, its file tree or the open file changes.
+    LaunchedEffect(controller, state.projectDir, state.tree.size, state.activeFile?.relativePath) {
+        val dir = state.projectDir ?: return@LaunchedEffect
+        val symbols = withContext(Dispatchers.IO) { CompletionWords.projectSymbols(dir) }
+        controller.setProjectSymbols(symbols)
+    }
     LaunchedEffect(Unit) { viewModel.aiContext.collect { aiViewModel.updateContext(it) } }
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->
@@ -568,6 +578,7 @@ private fun EditorArea(
     modifier: Modifier,
 ) {
     val scheme = CodeinTheme.editorScheme
+    var layoutPreview by rememberSaveable { mutableStateOf(false) }
     Column(modifier.fillMaxWidth()) {
         EditorTabStrip(state.tabs, state.activeIndex, onIntent)
         val active = state.activeFile
@@ -611,6 +622,16 @@ private fun EditorArea(
                     },
                 )
                 FindReplaceBar(state.find, { onIntent(WorkspaceIntent.Find(it)) }, Modifier.align(Alignment.TopEnd))
+                if (isLayoutFile(active.relativePath)) {
+                    if (layoutPreview) LayoutPreview(active.content, state.projectDir, Modifier.fillMaxSize())
+                    PillChip(
+                        if (layoutPreview) "Show code" else "Preview layout",
+                        icon = if (layoutPreview) CodeinIcons.Code else CodeinIcons.Eye,
+                        selected = layoutPreview,
+                        onClick = { layoutPreview = !layoutPreview },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.md),
+                    )
+                }
             }
         }
     }

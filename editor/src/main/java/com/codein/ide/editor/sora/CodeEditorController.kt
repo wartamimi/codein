@@ -53,6 +53,7 @@ class CodeEditorController {
     private var appliedFont: Int? = null
     private var suppressChangeEvents = false
     private var diagnostics: List<EditorDiagnostic> = emptyList()
+    private var projectSymbols: List<String> = emptyList()
 
     var onTextChanged: ((String) -> Unit)? = null
     var onCursorChanged: ((CursorState) -> Unit)? = null
@@ -88,7 +89,7 @@ class CodeEditorController {
                 language = newLanguage
                 view.setEditorLanguage(
                     if (newLanguage == EditorLanguage.PlainText) EmptyLanguage()
-                    else TextMateLanguage.create(newLanguage.scopeName, true),
+                    else TextMateLanguage.create(newLanguage.scopeName, true).also(::applyCompletionWords),
                 )
             }
             if (view.text.toString() != content) view.setText(content)
@@ -96,6 +97,20 @@ class CodeEditorController {
             suppressChangeEvents = false
         }
         applyDiagnostics(diagnostics)
+    }
+
+    /**
+     * Sets the project's declared names (classes, functions, resource names, view ids). They are
+     * offered in the completion popup together with the language keywords and the open file's words.
+     */
+    fun setProjectSymbols(symbols: List<String>) {
+        projectSymbols = symbols
+        (editor?.editorLanguage as? TextMateLanguage)?.let(::applyCompletionWords)
+    }
+
+    private fun applyCompletionWords(textMate: TextMateLanguage) {
+        val words = (CompletionWords.builtIn(language) + projectSymbols).distinct()
+        textMate.setCompleterKeywords(words.toTypedArray())
     }
 
     fun applyPreferences(context: Context, prefs: EditorPreferences) {
