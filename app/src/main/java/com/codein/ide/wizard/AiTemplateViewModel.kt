@@ -86,17 +86,39 @@ class AiTemplateViewModel @Inject constructor(
             val text = StringBuilder()
             _state.value = AiTemplateState.Generating(0, config.label)
             var failure: String? = null
-            llm.stream(config, system, listOf(ChatTurn(ChatRole.User, "Build this app:\n\n" + description.trim()))).collect { event ->
-                when (event) {
-                    is StreamEvent.TextDelta -> {
-                        text.append(event.text)
-                        _state.value = AiTemplateState.Generating(text.length, config.label)
-                    }
-                    is StreamEvent.Failed -> failure = event.message
-                    is StreamEvent.Completed -> if (event.stopReason in TruncatedStopReasons) {
-                        failure = "The answer was cut off at the output limit (${config.maxOutputTokens} tokens). Try a smaller app or a model with a larger output limit."
+            val request = ChatTurn(ChatRole.User, "Build this app:\n\n" + description.trim())
+            // Large apps do not fit one answer: when the output limit is hit, keep the finished
+            // blocks and ask the model to continue after them, a few times at most.
+            var round = 0
+            while (true) {
+                var truncated = false
+                val turns = if (round == 0) listOf(request) else listOf(
+                    request,
+                    ChatTurn(ChatRole.Assistant, text.toString()),
+                    ChatTurn(ChatRole.User, AiProjectFormat.CONTINUE_PROMPT),
+                )
+                val roundStart = text.length
+                llm.stream(config, system, turns).collect { event ->
+                    when (event) {
+                        is StreamEvent.TextDelta -> {
+                            text.append(event.text)
+                            _state.value = AiTemplateState.Generating(text.length, config.label)
+                        }
+                        is StreamEvent.Failed -> failure = event.message
+                        is StreamEvent.Completed -> truncated = event.stopReason in TruncatedStopReasons
                     }
                 }
+                if (failure != null || !truncated) break
+                val kept = AiProjectFormat.completePrefix(text.toString())
+                if (kept.length <= roundStart || round >= MaxContinuations) {
+                    failure = "The answer was cut off at the output limit (${config.maxOutputTokens} tokens) " +
+                        (if (round == 0) "before a single file was finished" else "after ${round + 1} parts") +
+                        ". Describe a smaller app, or raise the output limit in Settings → AI providers."
+                    break
+                }
+                text.setLength(kept.length)
+                text.append('\n')
+                round++
             }
             val parsed = AiProjectFormat.parse(text.toString())
             _state.value = when {
@@ -128,6 +150,7 @@ class AiTemplateViewModel @Inject constructor(
 
     private companion object {
         const val ProjectOutputTokens = 16000
+        const val MaxContinuations = 4
         val TruncatedStopReasons = setOf("max_tokens", "length", "MAX_TOKENS")
     }
 }

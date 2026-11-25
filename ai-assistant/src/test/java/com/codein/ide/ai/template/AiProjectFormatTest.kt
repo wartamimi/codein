@@ -55,4 +55,15 @@ class AiProjectFormatTest {
         val result = AiProjectFormat.parse("<<<FILE app/src/main/res/values/a.xml>>>\n<a/>\n<<<FILE app/src/main/res/values/b.xml>>>\n<b/>\n<<<END>>>")
         assertEquals(setOf("app/src/main/res/values/a.xml", "app/src/main/res/values/b.xml"), result.files.keys)
     }
+
+    @Test
+    fun keepsOnlyFinishedBlocksOfACutOffAnswer() {
+        val cut = "<<<SUMMARY>>>\nA counter\n<<<END>>>\n<<<FILE app/src/main/AndroidManifest.xml>>>\n<manifest/>\n<<<END>>>\n<<<FILE app/src/main/kotlin/a/B.kt>>>\nclass B {"
+        val kept = AiProjectFormat.completePrefix(cut)
+        assertTrue(kept.endsWith("<manifest/>\n<<<END>>>"))
+        assertEquals("", AiProjectFormat.completePrefix("<<<FILE x>>>\nunfinished"))
+        val joined = AiProjectFormat.parse(kept + "\n<<<FILE app/src/main/kotlin/a/B.kt>>>\nclass B\n<<<END>>>\n<<<DEPENDENCIES>>>\n<<<END>>>")
+        assertEquals(listOf("app/src/main/AndroidManifest.xml", "app/src/main/kotlin/a/B.kt"), joined.files.keys.toList())
+        assertEquals("A counter", joined.summary)
+    }
 }

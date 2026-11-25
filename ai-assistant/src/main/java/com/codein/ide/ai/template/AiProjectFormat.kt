@@ -35,7 +35,7 @@ data class GeneratedProject(
  */
 object AiProjectFormat {
 
-    private const val END = "<<<END>>>"
+    const val END = "<<<END>>>"
     private val fileHeader = Regex("""^<<<FILE\s+(.+?)>>>\s*$""")
     private val dependency = Regex("""^[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-+]+$""")
     private val allowedRoots = listOf("app/src/main/java/", "app/src/main/kotlin/", "app/src/main/res/")
@@ -70,6 +70,8 @@ object AiProjectFormat {
         appendLine("- Prefer the dependencies already declared. Add others only when needed, as group:artifact:version from Google Maven or Maven Central, with real, current versions.")
         appendLine("- No network access permissions or code unless the description asks for it. No annotation processors (kapt/KSP) and no Gradle plugins: they are not available.")
         appendLine("- Keep the app small: at most $MAX_FILES files.")
+        appendLine("- If the description asks for Gradle files, version catalogs, unit tests or other files outside those folders, skip them: Codein provides the build, and those files would be discarded.")
+        appendLine("- Write code, not explanations: no prose or Markdown outside the blocks, and keep comments short.")
         appendLine()
         appendLine("Answer with exactly these blocks and nothing outside them:")
         appendLine("<<<SUMMARY>>>")
@@ -93,6 +95,21 @@ object AiProjectFormat {
             appendLine(END)
         }
     }
+
+    /**
+     * The part of a cut-off answer that can be kept: everything up to the last complete block.
+     * Returns an empty string when no block was finished.
+     */
+    fun completePrefix(response: String): String {
+        val index = response.lastIndexOf(END)
+        return if (index < 0) "" else response.substring(0, index + END.length)
+    }
+
+    /** Asks the model to carry on after [completePrefix] when an answer hit the output limit. */
+    const val CONTINUE_PROMPT =
+        "Your answer was cut off at the output limit. Continue right after the last <<<END>>> line: " +
+            "start with the next <<<FILE ...>>> block (rewrite an unfinished file from its first line), " +
+            "do not repeat blocks you already wrote, and finish with the <<<DEPENDENCIES>>> block."
 
     /** Parses a model response. Never throws; unusable blocks end up in [GeneratedProject.rejected]. */
     fun parse(response: String): GeneratedProject {
